@@ -51,6 +51,13 @@ valeur métrologique certifiée.
 ## Installation
 
 ### Via HACS (dépôt personnalisé)
+
+[![Ouvrir dans Home Assistant et ajouter ce dépôt dans HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=maximeblanchard&repository=ha-heatpump-health&category=integration)
+
+Le bouton ouvre directement votre instance Home Assistant sur la boîte de dialogue HACS
+
+
+Sans le bouton, manuellement :
 1. HACS → menu ⋮ → "Dépôts personnalisés"
 2. Ajouter l'URL de ce dépôt GitHub, catégorie "Intégration"
 3. Installer "HeatPump-Health", redémarrer Home Assistant
