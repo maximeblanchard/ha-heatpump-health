@@ -1,0 +1,102 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configure HeatPump-Health",
+        "description": "Select the power sensor (W) of your heat pump and set the on/off cycle detection parameters.",
+        "data": {
+          "name": "Heat pump name",
+          "power_sensor": "Power sensor (W)",
+          "threshold_w": "On-detection threshold (W)",
+          "delay_off_seconds": "Delay before confirming off (s)",
+          "max_cycles": "Max cycles (expected lifetime)",
+          "seuil_cycles_faible": "Cycles/day threshold - low wear",
+          "seuil_cycles_eleve": "Cycles/day threshold - high wear",
+          "install_date": "Installation date (optional)",
+          "initial_cycles": "Cycles already completed (optional)"
+        }
+      },
+      "performance": {
+        "title": "Performance (theoretical COP/EER) — optional",
+        "description": "Enter the manufacturer datasheet values and the weather/climate entities to enable real-time performance estimation. Leave blank to skip this feature.",
+        "data": {
+          "climate_entity": "Climate entity (heat/cool mode + setpoint)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor",
+          "cop_nominal": "Nominal COP (datasheet)",
+          "eer_nominal": "Nominal EER (datasheet)",
+          "scop": "SCOP (datasheet, informative)",
+          "seer": "SEER (datasheet, informative)",
+          "kw_chaud": "Nominal heating capacity (kW)",
+          "kw_froid": "Nominal cooling capacity (kW)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This heat pump (power sensor) is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HeatPump-Health settings",
+        "data": {
+          "threshold_w": "On-detection threshold (W)",
+          "delay_off_seconds": "Delay before confirming off (s)",
+          "max_cycles": "Max cycles (expected lifetime)",
+          "seuil_cycles_faible": "Cycles/day threshold - low wear",
+          "seuil_cycles_eleve": "Cycles/day threshold - high wear",
+          "climate_entity": "Climate entity (heat/cool mode + setpoint)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor",
+          "cop_nominal": "Nominal COP (datasheet)",
+          "eer_nominal": "Nominal EER (datasheet)",
+          "scop": "SCOP (datasheet, informative)",
+          "seer": "SEER (datasheet, informative)",
+          "kw_chaud": "Nominal heating capacity (kW)",
+          "kw_froid": "Nominal cooling capacity (kW)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cycles_total": { "name": "Total cycles" },
+      "usure_pourcentage": { "name": "Wear" },
+      "temps_fonctionnement_total": { "name": "Total runtime" },
+      "temps_fonctionnement_7j": { "name": "Runtime (7 days)" },
+      "cycles_aujourdhui": { "name": "Cycles today" },
+      "cycles_7j": { "name": "Cycles (7 days)" },
+      "duree_moyenne_cycle_7j": { "name": "Average cycle duration (7 days)" },
+      "duree_moyenne_cycle_totale": { "name": "Average cycle duration (lifetime)" },
+      "taux_usure_quotidien": { "name": "Daily wear rate" },
+      "usure_quotidienne": { "name": "Daily wear" },
+      "duree_vie_restante_jours": { "name": "Estimated remaining life (days)" },
+      "duree_vie_restante_annees": { "name": "Estimated remaining life (years)" },
+      "indice_usure_7j": {
+        "name": "Wear index (7 days)",
+        "state": { "faible": "Low", "moyen": "Medium", "eleve": "High" }
+      },
+      "temperature_exterieure": { "name": "Outdoor temperature" },
+      "humidite_exterieure": { "name": "Outdoor humidity" },
+      "mode_fonctionnement": {
+        "name": "Operating mode",
+        "state": {
+          "chauffage": "Heating",
+          "climatisation": "Cooling",
+          "arret": "Idle",
+          "inconnu": "Unknown"
+        }
+      },
+      "cop_instantane": { "name": "Instant COP" },
+      "eer_instantane": { "name": "Instant EER" },
+      "puissance_restituee": { "name": "Delivered power" }
+    },
+    "binary_sensor": {
+      "en_fonctionnement": { "name": "Running" }
+    },
+    "button": {
+      "reset_compteurs": { "name": "Reset wear counters" }
+    }
+  }
+}

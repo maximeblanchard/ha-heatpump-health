@@ -1,0 +1,106 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurer HeatPump-Health",
+        "description": "Renseignez le capteur de puissance (W) de votre pompe à chaleur et les paramètres de détection des cycles marche/arrêt.",
+        "data": {
+          "name": "Nom de la PAC",
+          "power_sensor": "Capteur de puissance (W)",
+          "threshold_w": "Seuil de détection marche (W)",
+          "delay_off_seconds": "Délai avant confirmation d'arrêt (s)",
+          "max_cycles": "Nombre de cycles max (durée de vie)",
+          "seuil_cycles_faible": "Seuil cycles/jour - usure faible",
+          "seuil_cycles_eleve": "Seuil cycles/jour - usure élevée",
+          "install_date": "Date de mise en service (optionnel)",
+          "initial_cycles": "Nombre de cycles déjà effectués (optionnel)"
+        }
+      },
+      "performance": {
+        "title": "Rendement (COP/EER théorique) — optionnel",
+        "description": "Renseignez les valeurs de la fiche technique constructeur et les entités météo/climate pour activer le calcul de rendement en temps réel. Laissez vide pour ignorer cette fonctionnalité.",
+        "data": {
+          "climate_entity": "Entité climate (mode chaud/froid + consigne)",
+          "outdoor_temp_sensor": "Capteur de température extérieure",
+          "outdoor_humidity_sensor": "Capteur d'humidité extérieure",
+          "cop_nominal": "COP nominal (fiche technique)",
+          "eer_nominal": "EER nominal (fiche technique)",
+          "scop": "SCOP (fiche technique, informatif)",
+          "seer": "SEER (fiche technique, informatif)",
+          "kw_chaud": "Puissance thermique nominale - chaud (kW)",
+          "kw_froid": "Puissance thermique nominale - froid (kW)"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Cette PAC (ce capteur de puissance) est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Paramètres HeatPump-Health",
+        "data": {
+          "threshold_w": "Seuil de détection marche (W)",
+          "delay_off_seconds": "Délai avant confirmation d'arrêt (s)",
+          "max_cycles": "Nombre de cycles max (durée de vie)",
+          "seuil_cycles_faible": "Seuil cycles/jour - usure faible",
+          "seuil_cycles_eleve": "Seuil cycles/jour - usure élevée",
+          "climate_entity": "Entité climate (mode chaud/froid + consigne)",
+          "outdoor_temp_sensor": "Capteur de température extérieure",
+          "outdoor_humidity_sensor": "Capteur d'humidité extérieure",
+          "cop_nominal": "COP nominal (fiche technique)",
+          "eer_nominal": "EER nominal (fiche technique)",
+          "scop": "SCOP (fiche technique, informatif)",
+          "seer": "SEER (fiche technique, informatif)",
+          "kw_chaud": "Puissance thermique nominale - chaud (kW)",
+          "kw_froid": "Puissance thermique nominale - froid (kW)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "cycles_total": { "name": "Nombre de cycles (total)" },
+      "usure_pourcentage": { "name": "Usure" },
+      "temps_fonctionnement_total": { "name": "Temps de fonctionnement total" },
+      "temps_fonctionnement_7j": { "name": "Temps de fonctionnement (7 jours)" },
+      "cycles_aujourdhui": { "name": "Cycles aujourd'hui" },
+      "cycles_7j": { "name": "Cycles (7 jours)" },
+      "duree_moyenne_cycle_7j": { "name": "Durée moyenne d'un cycle (7 jours)" },
+      "duree_moyenne_cycle_totale": { "name": "Durée moyenne d'un cycle (depuis le début)" },
+      "taux_usure_quotidien": { "name": "Taux d'usure quotidien" },
+      "usure_quotidienne": { "name": "Usure quotidienne" },
+      "duree_vie_restante_jours": { "name": "Durée de vie restante (jours)" },
+      "duree_vie_restante_annees": { "name": "Durée de vie restante (années)" },
+      "indice_usure_7j": {
+        "name": "Indice d'usure (7 jours)",
+        "state": {
+          "faible": "Faible",
+          "moyen": "Moyen",
+          "eleve": "Élevé"
+        }
+      },
+      "temperature_exterieure": { "name": "Température extérieure" },
+      "humidite_exterieure": { "name": "Humidité extérieure" },
+      "mode_fonctionnement": {
+        "name": "Mode de fonctionnement",
+        "state": {
+          "chauffage": "Chauffage",
+          "climatisation": "Climatisation",
+          "arret": "Arrêt",
+          "inconnu": "Inconnu"
+        }
+      },
+      "cop_instantane": { "name": "COP instantané" },
+      "eer_instantane": { "name": "EER instantané" },
+      "puissance_restituee": { "name": "Puissance restituée" }
+    },
+    "binary_sensor": {
+      "en_fonctionnement": { "name": "En fonctionnement" }
+    },
+    "button": {
+      "reset_compteurs": { "name": "Réinitialiser les compteurs d'usure" }
+    }
+  }
+}
