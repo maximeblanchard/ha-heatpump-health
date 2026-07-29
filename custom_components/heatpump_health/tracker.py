@@ -488,6 +488,8 @@ class HeatPumpHealthTracker:
 
     @property
     def consigne_climate(self) -> float | None:
+        """La consigne demandée (cible). Ne PAS utiliser pour le calcul du COP/EER
+        instantané : ce n'est pas la température réelle traitée par l'échangeur."""
         climate_id = self.climate_entity
         if not climate_id:
             return None
@@ -510,6 +512,28 @@ class HeatPumpHealthTracker:
         return None
 
     @property
+    def temperature_interieure_actuelle(self) -> float | None:
+        """Température intérieure MESURÉE par l'entité climate (current_temperature).
+
+        C'est la valeur physiquement pertinente pour le COP/EER instantané : l'air
+        réellement aspiré par l'échangeur en ce moment, pas la consigne demandée.
+        Tant que la pièce n'a pas atteint la consigne, ce sont deux valeurs différentes.
+        """
+        climate_id = self.climate_entity
+        if not climate_id:
+            return None
+        state = self.hass.states.get(climate_id)
+        if state is None:
+            return None
+        current = state.attributes.get("current_temperature")
+        if current is None:
+            return None
+        try:
+            return float(current)
+        except (ValueError, TypeError):
+            return None
+
+    @property
     def puissance_absorbee_kw(self) -> float:
         state = self.hass.states.get(self.power_sensor)
         if state is None:
@@ -525,7 +549,11 @@ class HeatPumpHealthTracker:
             return None
         eta = self.eta_heating
         t_ext = self.temperature_exterieure
-        t_int = self.consigne_climate
+        # Température réelle traitée par l'échangeur, PAS la consigne (cf. discussion :
+        # tant que la pièce n'a pas atteint la cible, ce sont deux valeurs différentes).
+        t_int = self.temperature_interieure_actuelle
+        if t_int is None:
+            t_int = self.consigne_climate  # repli si l'entité climate ne mesure pas
         if eta is None or t_ext is None or t_int is None:
             return None
         return estimate_cop_heating(t_ext, t_int, eta, self.humidite_exterieure)
@@ -536,7 +564,9 @@ class HeatPumpHealthTracker:
             return None
         eta = self.eta_cooling
         t_ext = self.temperature_exterieure
-        t_int = self.consigne_climate
+        t_int = self.temperature_interieure_actuelle
+        if t_int is None:
+            t_int = self.consigne_climate  # repli si l'entité climate ne mesure pas
         if eta is None or t_ext is None or t_int is None:
             return None
         return estimate_eer_cooling(t_ext, t_int, eta)

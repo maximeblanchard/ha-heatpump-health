@@ -169,6 +169,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         attributes_fn=lambda t: {
             "cop_nominal": t.cop_nominal,
             "eta_calibre": round(t.eta_heating, 3) if t.eta_heating else None,
+            "temperature_interieure_utilisee": t.temperature_interieure_actuelle,
+            "consigne_climate": t.consigne_climate,
         },
     ),
     HeatPumpHealthSensorDescription(
@@ -181,6 +183,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         attributes_fn=lambda t: {
             "eer_nominal": t.eer_nominal,
             "eta_calibre": round(t.eta_cooling, 3) if t.eta_cooling else None,
+            "temperature_interieure_utilisee": t.temperature_interieure_actuelle,
+            "consigne_climate": t.consigne_climate,
         },
     ),
     HeatPumpHealthSensorDescription(

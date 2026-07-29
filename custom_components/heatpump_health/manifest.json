@@ -1,7 +1,7 @@
 {
   "domain": "heatpump_health",
   "name": "HeatPump-Health",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "config_flow": true,
   "integration_type": "device",
   "iot_class": "calculated",
