@@ -108,12 +108,3 @@ l'intégration pour l'instant).
 ## Licence
 
 MIT
-
-## Logo
-
-`custom_components/heatpump_health/heatpump_health_icon.svg` (source vectoriel) + exports
-`icon.png`/`icon@2x.png` (256/512px) et `logo.png`/`logo@2x.png`. Pour que l'icône apparaisse
-dans HACS et sur la page d'intégration Home Assistant (pas seulement dans ce dépôt), il faut
-soumettre ces 4 PNG séparément au dépôt [home-assistant/brands](https://github.com/home-assistant/brands)
-sous `custom_integrations/heatpump_health/{icon.png,icon@2x.png,logo.png,logo@2x.png}` — une
-pull request y est revue par l'équipe Home Assistant avant d'être fusionnée.
