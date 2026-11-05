@@ -17,20 +17,22 @@
         }
       },
       "performance": {
-        "title": "Rendement (COP/EER théorique) — optionnel",
-        "description": "Renseignez les valeurs de la fiche technique constructeur et les entités météo/climate pour activer le calcul de rendement en temps réel. Laissez vide pour ignorer cette fonctionnalité.",
+        "title": "DJU & Rendement (COP/EER théorique) — optionnel",
+        "description": "Renseignez le capteur de température extérieure pour activer le suivi kWh/DJU (base 18 °C), et complétez si souhaité l'entité climate et la fiche technique constructeur pour le COP/EER théorique. Laissez vide pour ignorer.",
         "data": {
-          "climate_entity": "Entité climate (mode chaud/froid + consigne)",
-          "outdoor_temp_sensor": "Capteur de température extérieure",
-          "outdoor_humidity_sensor": "Capteur d'humidité extérieure",
+          "climate_entity": "Entité climate (mode chaud/froid + température intérieure)",
+          "outdoor_temp_sensor": "Capteur de température extérieure (DJU + COP/EER)",
+          "outdoor_humidity_sensor": "Capteur d'humidité extérieure (correction givrage)",
           "cop_nominal": "COP nominal (fiche technique)",
           "eer_nominal": "EER nominal (fiche technique)",
-          "scop": "SCOP (fiche technique, informatif)",
-          "seer": "SEER (fiche technique, informatif)",
           "kw_chaud": "Puissance thermique nominale - chaud (kW)",
           "kw_froid": "Puissance thermique nominale - froid (kW)"
         }
       }
+    },
+    "error": {
+      "invalid_thresholds": "Le seuil d'usure élevée doit être strictement supérieur au seuil d'usure faible.",
+      "future_install_date": "La date de mise en service ne peut pas être dans le futur."
     },
     "abort": {
       "already_configured": "Cette PAC (ce capteur de puissance) est déjà configurée."
@@ -46,17 +48,18 @@
           "max_cycles": "Nombre de cycles max (durée de vie)",
           "seuil_cycles_faible": "Seuil cycles/jour - usure faible",
           "seuil_cycles_eleve": "Seuil cycles/jour - usure élevée",
-          "climate_entity": "Entité climate (mode chaud/froid + consigne)",
-          "outdoor_temp_sensor": "Capteur de température extérieure",
-          "outdoor_humidity_sensor": "Capteur d'humidité extérieure",
+          "climate_entity": "Entité climate (mode chaud/froid + température intérieure)",
+          "outdoor_temp_sensor": "Capteur de température extérieure (DJU + COP/EER)",
+          "outdoor_humidity_sensor": "Capteur d'humidité extérieure (correction givrage)",
           "cop_nominal": "COP nominal (fiche technique)",
           "eer_nominal": "EER nominal (fiche technique)",
-          "scop": "SCOP (fiche technique, informatif)",
-          "seer": "SEER (fiche technique, informatif)",
           "kw_chaud": "Puissance thermique nominale - chaud (kW)",
           "kw_froid": "Puissance thermique nominale - froid (kW)"
         }
       }
+    },
+    "error": {
+      "invalid_thresholds": "Le seuil d'usure élevée doit être strictement supérieur au seuil d'usure faible."
     }
   },
   "entity": {
@@ -81,6 +84,10 @@
           "eleve": "Élevé"
         }
       },
+      "dju_aujourdhui": { "name": "DJU aujourd'hui" },
+      "kwh_par_dju_aujourdhui": { "name": "Efficacité DJU (aujourd'hui)" },
+      "kwh_par_dju_veille": { "name": "Efficacité DJU (veille)" },
+      "kwh_par_dju_7j": { "name": "Efficacité DJU (7 jours)" },
       "temperature_exterieure": { "name": "Température extérieure" },
       "humidite_exterieure": { "name": "Humidité extérieure" },
       "mode_fonctionnement": {

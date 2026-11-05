@@ -13,14 +13,12 @@ CONF_SEUIL_ELEVE = "seuil_cycles_eleve"
 CONF_INSTALL_DATE = "install_date"
 CONF_INITIAL_CYCLES = "initial_cycles"
 
-# Données constructeur et entités pour le calcul de rendement (COP/EER théorique)
+# Données constructeur et entités pour le calcul de rendement (COP/EER théorique & DJU)
 CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_OUTDOOR_TEMP_SENSOR = "outdoor_temp_sensor"
 CONF_OUTDOOR_HUMIDITY_SENSOR = "outdoor_humidity_sensor"
 CONF_COP_NOMINAL = "cop_nominal"
 CONF_EER_NOMINAL = "eer_nominal"
-CONF_SCOP = "scop"
-CONF_SEER = "seer"
 CONF_KW_CHAUD = "kw_chaud"
 CONF_KW_FROID = "kw_froid"
 
@@ -35,7 +33,15 @@ DEFAULT_INITIAL_CYCLES = 0
 # Comportement interne
 ROLLING_WINDOW_DAYS = 7
 STORAGE_VERSION = 1
-UPDATE_INTERVAL_SECONDS = 60  # rafraîchissement des capteurs "temps écoulé" pendant un cycle
+UPDATE_INTERVAL_SECONDS = 60  # rafraîchissement périodique (durée en cours, intégration kWh/DJU)
+PERIODIC_SAVE_SECONDS = 900  # sauvegarde intermédiaire toutes les 15 min
+MAX_INTEGRATION_GAP_SECONDS = 300  # plafond d'intégration (évite de compter une coupure HA)
+
+# Suivi énergétique par DJU (norme Météo-France / COSTIC : base 18 °C)
+DJU_BASE_TEMP_C = 18.0
+MIN_DJU_TODAY = 0.1  # seuil minimal de DJU accumulés sur le jour en cours pour afficher kWh/DJU
+MIN_DJU_DAILY = 0.5  # seuil minimal de DJU sur une journée complète (évite le bruit hors saison)
+MIN_TRACKED_HOURS_FOR_ARCHIVE = 18.0  # couverture minimale d'une journée pour consolider la veille
 
 # Signal dispatcher envoyé à chaque mise à jour des données
 SIGNAL_UPDATE = f"{DOMAIN}_update"
@@ -50,4 +56,3 @@ MODE_CHAUFFAGE = "chauffage"
 MODE_CLIMATISATION = "climatisation"
 MODE_ARRET = "arret"
 MODE_INCONNU = "inconnu"
-

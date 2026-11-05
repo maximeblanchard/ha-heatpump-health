@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -11,14 +12,17 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTemperature
+from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTemperature, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SIGNAL_UPDATE
+from .const import DJU_BASE_TEMP_C, DOMAIN, SIGNAL_UPDATE
 from .tracker import HeatPumpHealthTracker
+
+UNIT_YEARS: str = getattr(UnitOfTime, "YEARS", "yr")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -26,10 +30,12 @@ class HeatPumpHealthSensorDescription(SensorEntityDescription):
     """Description d'un indicateur HeatPump-Health, avec sa fonction de calcul."""
 
     value_fn: Callable[[HeatPumpHealthTracker], object]
-    attributes_fn: Callable[[HeatPumpHealthTracker], dict] | None = None
+    attributes_fn: Callable[[HeatPumpHealthTracker], dict[str, Any]] | None = None
+    exists_fn: Callable[[HeatPumpHealthTracker], bool] = lambda _: True
 
 
 SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
+    # -- Usure et cycles (toujours créés) -- #
     HeatPumpHealthSensorDescription(
         key="cycles_total",
         translation_key="cycles_total",
@@ -42,7 +48,7 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="usure_pourcentage",
         translation_key="usure_pourcentage",
         icon="mdi:gauge",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.usure_pourcentage,
     ),
@@ -50,7 +56,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="temps_fonctionnement_total",
         translation_key="temps_fonctionnement_total",
         icon="mdi:clock-outline",
-        native_unit_of_measurement="h",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
         state_class=SensorStateClass.TOTAL_INCREASING,
         value_fn=lambda t: t.temps_fonctionnement_total_h,
     ),
@@ -58,7 +65,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="temps_fonctionnement_7j",
         translation_key="temps_fonctionnement_7j",
         icon="mdi:clock-outline",
-        native_unit_of_measurement="h",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.temps_fonctionnement_7j_h,
     ),
@@ -82,7 +90,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="duree_moyenne_cycle_7j",
         translation_key="duree_moyenne_cycle_7j",
         icon="mdi:timer-outline",
-        native_unit_of_measurement="min",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.duree_moyenne_cycle_7j_min,
     ),
@@ -90,7 +99,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="duree_moyenne_cycle_totale",
         translation_key="duree_moyenne_cycle_totale",
         icon="mdi:timer-outline",
-        native_unit_of_measurement="min",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.duree_moyenne_cycle_totale_min,
     ),
@@ -114,7 +124,8 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="duree_vie_restante_jours",
         translation_key="duree_vie_restante_jours",
         icon="mdi:calendar-clock",
-        native_unit_of_measurement="d",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.DAYS,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.duree_vie_restante_jours,
     ),
@@ -122,7 +133,7 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         key="duree_vie_restante_annees",
         translation_key="duree_vie_restante_annees",
         icon="mdi:calendar-clock",
-        native_unit_of_measurement="an",
+        native_unit_of_measurement=UNIT_YEARS,
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda t: t.duree_vie_restante_annees,
     ),
@@ -134,13 +145,76 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         options=["faible", "moyen", "eleve"],
         value_fn=lambda t: t.indice_usure_7j,
     ),
-    # -- Rendement (COP/EER théorique) -- #
+    # -- Suivi DJU & efficacité énergétique en kWh/DJU (si capteur T° ext configuré) -- #
+    HeatPumpHealthSensorDescription(
+        key="dju_aujourdhui",
+        translation_key="dju_aujourdhui",
+        icon="mdi:thermometer-lines",
+        native_unit_of_measurement="DJU",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+        exists_fn=lambda t: t.outdoor_temp_sensor is not None,
+        value_fn=lambda t: round(t.daily_dju, 2),
+        attributes_fn=lambda t: {
+            "temperature_base_c": DJU_BASE_TEMP_C,
+            "dju_veille": t.dju_veille,
+            "dju_7j": t.dju_7j,
+        },
+    ),
+    HeatPumpHealthSensorDescription(
+        key="kwh_par_dju_aujourdhui",
+        translation_key="kwh_par_dju_aujourdhui",
+        icon="mdi:home-thermometer-outline",
+        native_unit_of_measurement="kWh/DJU",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        exists_fn=lambda t: t.outdoor_temp_sensor is not None,
+        value_fn=lambda t: t.kwh_par_dju_aujourdhui,
+        attributes_fn=lambda t: {
+            "energie_aujourdhui_kwh": round(t.daily_energy_kwh, 3),
+            "dju_aujourdhui": round(t.daily_dju, 2),
+            "heures_suivies_aujourdhui": round(t.daily_tracked_hours, 1),
+            "temperature_base_c": DJU_BASE_TEMP_C,
+        },
+    ),
+    HeatPumpHealthSensorDescription(
+        key="kwh_par_dju_veille",
+        translation_key="kwh_par_dju_veille",
+        icon="mdi:calendar-arrow-left",
+        native_unit_of_measurement="kWh/DJU",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        exists_fn=lambda t: t.outdoor_temp_sensor is not None,
+        value_fn=lambda t: t.kwh_par_dju_veille,
+        attributes_fn=lambda t: {
+            "date_veille": t.date_veille,
+            "energie_veille_kwh": t.energie_veille_kwh,
+            "dju_veille": t.dju_veille,
+        },
+    ),
+    HeatPumpHealthSensorDescription(
+        key="kwh_par_dju_7j",
+        translation_key="kwh_par_dju_7j",
+        icon="mdi:chart-timeline-variant",
+        native_unit_of_measurement="kWh/DJU",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        exists_fn=lambda t: t.outdoor_temp_sensor is not None,
+        value_fn=lambda t: t.kwh_par_dju_7j,
+        attributes_fn=lambda t: {
+            "energie_7j_kwh": t.energie_7j_kwh,
+            "dju_7j": t.dju_7j,
+            "jours_comptabilises": len(t.dju_history),
+        },
+    ),
+    # -- Rendement thermodynamique (créés uniquement selon les options renseignées) -- #
     HeatPumpHealthSensorDescription(
         key="temperature_exterieure",
         translation_key="temperature_exterieure",
         device_class=SensorDeviceClass.TEMPERATURE,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         state_class=SensorStateClass.MEASUREMENT,
+        exists_fn=lambda t: t.outdoor_temp_sensor is not None,
         value_fn=lambda t: t.temperature_exterieure,
     ),
     HeatPumpHealthSensorDescription(
@@ -149,6 +223,7 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         device_class=SensorDeviceClass.HUMIDITY,
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        exists_fn=lambda t: t.outdoor_humidity_sensor is not None,
         value_fn=lambda t: t.humidite_exterieure,
     ),
     HeatPumpHealthSensorDescription(
@@ -157,6 +232,7 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         icon="mdi:heat-pump",
         device_class=SensorDeviceClass.ENUM,
         options=["chauffage", "climatisation", "arret", "inconnu"],
+        exists_fn=lambda t: t.climate_entity is not None,
         value_fn=lambda t: t.mode_fonctionnement,
     ),
     HeatPumpHealthSensorDescription(
@@ -165,11 +241,13 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         icon="mdi:fire",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        exists_fn=lambda t: t.has_cop_config,
         value_fn=lambda t: t.cop_instantane,
         attributes_fn=lambda t: {
             "cop_nominal": t.cop_nominal,
             "eta_calibre": round(t.eta_heating, 3) if t.eta_heating else None,
-            "temperature_interieure_utilisee": t.temperature_interieure_actuelle,
+            "temperature_interieure_utilisee": t.temperature_interieure_effective,
+            "source_temperature_interieure": t.source_temperature_interieure,
             "consigne_climate": t.consigne_climate,
         },
     ),
@@ -179,11 +257,13 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         icon="mdi:snowflake",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        exists_fn=lambda t: t.has_eer_config,
         value_fn=lambda t: t.eer_instantane,
         attributes_fn=lambda t: {
             "eer_nominal": t.eer_nominal,
             "eta_calibre": round(t.eta_cooling, 3) if t.eta_cooling else None,
-            "temperature_interieure_utilisee": t.temperature_interieure_actuelle,
+            "temperature_interieure_utilisee": t.temperature_interieure_effective,
+            "source_temperature_interieure": t.source_temperature_interieure,
             "consigne_climate": t.consigne_climate,
         },
     ),
@@ -194,6 +274,7 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         state_class=SensorStateClass.MEASUREMENT,
+        exists_fn=lambda t: t.has_cop_config or t.has_eer_config,
         value_fn=lambda t: t.puissance_restituee_kw,
         attributes_fn=lambda t: {
             "puissance_absorbee_kw": round(t.puissance_absorbee_kw, 3),
@@ -206,22 +287,36 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Crée les entités sensor à partir des descriptions ci-dessus."""
+    """Crée les entités sensor pertinentes et nettoie les entités optionnelles désactivées."""
     tracker: HeatPumpHealthTracker = hass.data[DOMAIN][entry.entry_id]
+    ent_reg = er.async_get(hass)
+
+    active_descriptions: list[HeatPumpHealthSensorDescription] = []
+    for description in SENSOR_DESCRIPTIONS:
+        if description.exists_fn(tracker):
+            active_descriptions.append(description)
+        else:
+            unique_id = f"{entry.entry_id}_{description.key}"
+            if entity_id := ent_reg.async_get_entity_id("sensor", DOMAIN, unique_id):
+                ent_reg.async_remove(entity_id)
+
     async_add_entities(
-        HeatPumpHealthSensor(tracker, entry, description) for description in SENSOR_DESCRIPTIONS
+        HeatPumpHealthSensor(tracker, entry, description) for description in active_descriptions
     )
 
 
 class HeatPumpHealthSensor(SensorEntity):
-    """Un indicateur d'usure calculé de la PAC."""
+    """Un indicateur calculé de la PAC."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     entity_description: HeatPumpHealthSensorDescription
 
     def __init__(
-        self, tracker: HeatPumpHealthTracker, entry: ConfigEntry, description: HeatPumpHealthSensorDescription
+        self,
+        tracker: HeatPumpHealthTracker,
+        entry: ConfigEntry,
+        description: HeatPumpHealthSensorDescription,
     ) -> None:
         self.entity_description = description
         self._tracker = tracker
@@ -239,7 +334,7 @@ class HeatPumpHealthSensor(SensorEntity):
         return self.entity_description.value_fn(self._tracker)
 
     @property
-    def extra_state_attributes(self) -> dict | None:
+    def extra_state_attributes(self) -> dict[str, Any] | None:
         if self.entity_description.attributes_fn is None:
             return None
         return self.entity_description.attributes_fn(self._tracker)

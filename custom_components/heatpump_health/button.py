@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -24,6 +25,7 @@ class HeatPumpHealthResetButton(ButtonEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "reset_compteurs"
     _attr_icon = "mdi:restart-alert"
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, tracker: HeatPumpHealthTracker, entry: ConfigEntry) -> None:
         self._tracker = tracker

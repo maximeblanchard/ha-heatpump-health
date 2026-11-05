@@ -17,20 +17,22 @@
         }
       },
       "performance": {
-        "title": "Performance (theoretical COP/EER) — optional",
-        "description": "Enter the manufacturer datasheet values and the weather/climate entities to enable real-time performance estimation. Leave blank to skip this feature.",
+        "title": "HDD & Performance (theoretical COP/EER) — optional",
+        "description": "Select the outdoor temperature sensor to enable daily kWh/HDD tracking (18 °C base), and optionally provide the climate entity and datasheet values for theoretical COP/EER estimation. Leave blank to skip.",
         "data": {
-          "climate_entity": "Climate entity (heat/cool mode + setpoint)",
-          "outdoor_temp_sensor": "Outdoor temperature sensor",
-          "outdoor_humidity_sensor": "Outdoor humidity sensor",
+          "climate_entity": "Climate entity (heat/cool mode + indoor temperature)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor (HDD + COP/EER)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (defrost correction)",
           "cop_nominal": "Nominal COP (datasheet)",
           "eer_nominal": "Nominal EER (datasheet)",
-          "scop": "SCOP (datasheet, informative)",
-          "seer": "SEER (datasheet, informative)",
           "kw_chaud": "Nominal heating capacity (kW)",
           "kw_froid": "Nominal cooling capacity (kW)"
         }
       }
+    },
+    "error": {
+      "invalid_thresholds": "The high wear threshold must be strictly greater than the low wear threshold.",
+      "future_install_date": "The installation date cannot be in the future."
     },
     "abort": {
       "already_configured": "This heat pump (power sensor) is already configured."
@@ -46,17 +48,18 @@
           "max_cycles": "Max cycles (expected lifetime)",
           "seuil_cycles_faible": "Cycles/day threshold - low wear",
           "seuil_cycles_eleve": "Cycles/day threshold - high wear",
-          "climate_entity": "Climate entity (heat/cool mode + setpoint)",
-          "outdoor_temp_sensor": "Outdoor temperature sensor",
-          "outdoor_humidity_sensor": "Outdoor humidity sensor",
+          "climate_entity": "Climate entity (heat/cool mode + indoor temperature)",
+          "outdoor_temp_sensor": "Outdoor temperature sensor (HDD + COP/EER)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (defrost correction)",
           "cop_nominal": "Nominal COP (datasheet)",
           "eer_nominal": "Nominal EER (datasheet)",
-          "scop": "SCOP (datasheet, informative)",
-          "seer": "SEER (datasheet, informative)",
           "kw_chaud": "Nominal heating capacity (kW)",
           "kw_froid": "Nominal cooling capacity (kW)"
         }
       }
+    },
+    "error": {
+      "invalid_thresholds": "The high wear threshold must be strictly greater than the low wear threshold."
     }
   },
   "entity": {
@@ -77,6 +80,10 @@
         "name": "Wear index (7 days)",
         "state": { "faible": "Low", "moyen": "Medium", "eleve": "High" }
       },
+      "dju_aujourdhui": { "name": "HDD today" },
+      "kwh_par_dju_aujourdhui": { "name": "Energy per HDD (today)" },
+      "kwh_par_dju_veille": { "name": "Energy per HDD (yesterday)" },
+      "kwh_par_dju_7j": { "name": "Energy per HDD (7 days)" },
       "temperature_exterieure": { "name": "Outdoor temperature" },
       "humidite_exterieure": { "name": "Outdoor humidity" },
       "mode_fonctionnement": {

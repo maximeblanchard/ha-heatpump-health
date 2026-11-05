@@ -1,13 +1,12 @@
 {
   "domain": "heatpump_health",
   "name": "HeatPump-Health",
-  "version": "1.0.3",
+  "codeowners": ["@maximeblanchard"],
   "config_flow": true,
+  "documentation": "https://github.com/maximeblanchard/ha-heatpump-health",
   "integration_type": "device",
   "iot_class": "calculated",
-  "documentation": "https://github.com/maximeblanchard/ha-heatpump-health",
   "issue_tracker": "https://github.com/maximeblanchard/ha-heatpump-health/issues",
-  "codeowners": ["@maximeblanchard"],
   "requirements": [],
-  "assets": ["logo.png", "logo@2x.png"]  
+  "version": "1.1.0"
 }
