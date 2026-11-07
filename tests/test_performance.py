@@ -80,9 +80,14 @@ def test_cop_clamping_on_extreme_temperatures() -> None:
     assert cop_cold >= perf.COP_MIN_CLAMP
 
 
-def test_incremental_dju_base_18() -> None:
+def test_incremental_dju_base_18_and_real_indoor_temp() -> None:
+    # Base 18°C standard
     assert perf.incremental_dju(8.0, 86400.0) == pytest.approx(10.0)
     assert perf.incremental_dju(8.0, 43200.0) == pytest.approx(5.0)
     assert perf.incremental_dju(18.0, 86400.0) == 0.0
     assert perf.incremental_dju(24.5, 86400.0) == 0.0
     assert perf.incremental_dju(0.0, 0.0) == 0.0
+
+    # DJU réel basé sur la température intérieure moyenne (ex: 21.5°C int, 8.0°C ext -> 13.5 DJU/24h)
+    assert perf.incremental_dju(8.0, 86400.0, base_temp_c=21.5) == pytest.approx(13.5)
+    assert perf.incremental_dju(22.0, 86400.0, base_temp_c=21.5) == 0.0

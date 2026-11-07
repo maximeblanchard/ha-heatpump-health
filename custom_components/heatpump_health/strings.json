@@ -18,9 +18,10 @@
       },
       "performance": {
         "title": "DJU & Rendement (COP/EER théorique) — optionnel",
-        "description": "Renseignez le capteur de température extérieure pour activer le suivi kWh/DJU (base 18 °C), et complétez si souhaité l'entité climate et la fiche technique constructeur pour le COP/EER théorique. Laissez vide pour ignorer.",
+        "description": "Renseignez le capteur de température extérieure pour activer le suivi kWh/DJU (base 18 °C), ajoutez vos capteurs de température intérieure pour le suivi kWh/DJU réel (compensé par la T° ambiante moyenne), et complétez si souhaité l'entité climate et la fiche technique constructeur. Laissez vide pour ignorer.",
         "data": {
           "climate_entity": "Entité climate (mode chaud/froid + température intérieure)",
+          "indoor_temp_sensors": "Capteurs de température intérieure (moyenne des pièces)",
           "outdoor_temp_sensor": "Capteur de température extérieure (DJU + COP/EER)",
           "outdoor_humidity_sensor": "Capteur d'humidité extérieure (correction givrage)",
           "cop_nominal": "COP nominal (fiche technique)",
@@ -49,6 +50,7 @@
           "seuil_cycles_faible": "Seuil cycles/jour - usure faible",
           "seuil_cycles_eleve": "Seuil cycles/jour - usure élevée",
           "climate_entity": "Entité climate (mode chaud/froid + température intérieure)",
+          "indoor_temp_sensors": "Capteurs de température intérieure (moyenne des pièces)",
           "outdoor_temp_sensor": "Capteur de température extérieure (DJU + COP/EER)",
           "outdoor_humidity_sensor": "Capteur d'humidité extérieure (correction givrage)",
           "cop_nominal": "COP nominal (fiche technique)",
@@ -88,6 +90,11 @@
       "kwh_par_dju_aujourdhui": { "name": "Efficacité DJU (aujourd'hui)" },
       "kwh_par_dju_veille": { "name": "Efficacité DJU (veille)" },
       "kwh_par_dju_7j": { "name": "Efficacité DJU (7 jours)" },
+      "temperature_interieure_moyenne": { "name": "Température intérieure moyenne" },
+      "dju_reel_aujourdhui": { "name": "DJU réel aujourd'hui" },
+      "kwh_par_dju_reel_aujourdhui": { "name": "Efficacité DJU réel (aujourd'hui)" },
+      "kwh_par_dju_reel_veille": { "name": "Efficacité DJU réel (veille)" },
+      "kwh_par_dju_reel_7j": { "name": "Efficacité DJU réel (7 jours)" },
       "temperature_exterieure": { "name": "Température extérieure" },
       "humidite_exterieure": { "name": "Humidité extérieure" },
       "mode_fonctionnement": {

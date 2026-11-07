@@ -15,6 +15,7 @@ from .const import (
     CONF_COP_NOMINAL,
     CONF_DELAY_OFF,
     CONF_EER_NOMINAL,
+    CONF_INDOOR_TEMP_SENSORS,
     CONF_INITIAL_CYCLES,
     CONF_INSTALL_DATE,
     CONF_KW_CHAUD,
@@ -52,7 +53,9 @@ def _number(unit: str, minimum: float = 0, maximum: float = 200000, step: float 
 
 def _suggest(defaults: dict[str, Any], key: str) -> dict[str, Any]:
     value = defaults.get(key)
-    return {"description": {"suggested_value": value}} if value is not None else {}
+    if value is None or value == []:
+        return {}
+    return {"description": {"suggested_value": value}}
 
 
 def _performance_schema(defaults: dict[str, Any]) -> vol.Schema:
@@ -66,6 +69,11 @@ def _performance_schema(defaults: dict[str, Any]) -> vol.Schema:
         {
             vol.Optional(CONF_CLIMATE_ENTITY, **_suggest(defaults, CONF_CLIMATE_ENTITY)): selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate")
+            ),
+            vol.Optional(
+                CONF_INDOOR_TEMP_SENSORS, **_suggest(defaults, CONF_INDOOR_TEMP_SENSORS)
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", multiple=True)
             ),
             vol.Optional(
                 CONF_OUTDOOR_TEMP_SENSOR, **_suggest(defaults, CONF_OUTDOOR_TEMP_SENSOR)
@@ -151,7 +159,7 @@ class HeatPumpHealthConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_performance(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Étape optionnelle : entités météo/climate (DJU & COP/EER) et données constructeur."""
+        """Étape optionnelle : entités météo/intérieures/climate (DJU & COP/EER) et données constructeur."""
         if user_input is not None:
             self._data.update(user_input)
             return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -167,7 +175,7 @@ class HeatPumpHealthConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HeatPumpHealthOptionsFlow(config_entries.OptionsFlow):
-    """Permet d'ajuster les seuils, les entités météo/climate et le rendement après l'installation."""
+    """Permet d'ajuster les seuils, les capteurs intérieurs/extérieurs et le rendement après l'installation."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> config_entries.ConfigFlowResult:
         errors: dict[str, str] = {}

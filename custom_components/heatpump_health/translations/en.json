@@ -18,9 +18,10 @@
       },
       "performance": {
         "title": "HDD & Performance (theoretical COP/EER) — optional",
-        "description": "Select the outdoor temperature sensor to enable daily kWh/HDD tracking (18 °C base), and optionally provide the climate entity and datasheet values for theoretical COP/EER estimation. Leave blank to skip.",
+        "description": "Select the outdoor temperature sensor to enable daily kWh/HDD tracking (18 °C base), add your indoor temperature sensors to enable real kWh/HDD tracking compensated for average room temperature, and optionally provide the climate entity and datasheet values. Leave blank to skip.",
         "data": {
           "climate_entity": "Climate entity (heat/cool mode + indoor temperature)",
+          "indoor_temp_sensors": "Indoor temperature sensors (room average)",
           "outdoor_temp_sensor": "Outdoor temperature sensor (HDD + COP/EER)",
           "outdoor_humidity_sensor": "Outdoor humidity sensor (defrost correction)",
           "cop_nominal": "Nominal COP (datasheet)",
@@ -49,6 +50,7 @@
           "seuil_cycles_faible": "Cycles/day threshold - low wear",
           "seuil_cycles_eleve": "Cycles/day threshold - high wear",
           "climate_entity": "Climate entity (heat/cool mode + indoor temperature)",
+          "indoor_temp_sensors": "Indoor temperature sensors (room average)",
           "outdoor_temp_sensor": "Outdoor temperature sensor (HDD + COP/EER)",
           "outdoor_humidity_sensor": "Outdoor humidity sensor (defrost correction)",
           "cop_nominal": "Nominal COP (datasheet)",
@@ -84,6 +86,11 @@
       "kwh_par_dju_aujourdhui": { "name": "Energy per HDD (today)" },
       "kwh_par_dju_veille": { "name": "Energy per HDD (yesterday)" },
       "kwh_par_dju_7j": { "name": "Energy per HDD (7 days)" },
+      "temperature_interieure_moyenne": { "name": "Average indoor temperature" },
+      "dju_reel_aujourdhui": { "name": "Real HDD today" },
+      "kwh_par_dju_reel_aujourdhui": { "name": "Energy per real HDD (today)" },
+      "kwh_par_dju_reel_veille": { "name": "Energy per real HDD (yesterday)" },
+      "kwh_par_dju_reel_7j": { "name": "Energy per real HDD (7 days)" },
       "temperature_exterieure": { "name": "Outdoor temperature" },
       "humidite_exterieure": { "name": "Outdoor humidity" },
       "mode_fonctionnement": {

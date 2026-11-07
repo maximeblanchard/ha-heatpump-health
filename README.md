@@ -4,7 +4,8 @@
 
 Intégration personnalisée Home Assistant qui calcule des indicateurs d'usure d'une pompe à
 chaleur (ou de tout appareil à cycles marche/arrêt), son efficacité énergétique quotidienne
-en **kWh / DJU** et une estimation de rendement thermodynamique à partir d'un simple capteur
+en **kWh / DJU** (standard base 18 °C et **DJU réel** compensé par la température intérieure
+moyenne) ainsi qu'une estimation de rendement thermodynamique à partir d'un simple capteur
 de puissance en Watts.
 
 ## Indicateurs fournis
@@ -28,7 +29,7 @@ de puissance en Watts.
 | `binary_sensor.<nom>_en_fonctionnement` | État marche/arrêt en direct |
 | `button.<nom>_reinitialiser_les_compteurs_dusure` | Remise à zéro (catégorie Configuration, ex : remplacement du compresseur) |
 
-### Suivi énergétique par DJU (optionnel — créé si un capteur de température extérieure est configuré)
+### Suivi énergétique par DJU standard (base 18 °C — créé si capteur T° extérieure configuré)
 
 | Entité | Description |
 |---|---|
@@ -36,6 +37,22 @@ de puissance en Watts.
 | `sensor.<nom>_efficacite_dju_aujourdhui` | Consommation en temps réel rapportée à la rigueur météo du jour (`kWh/DJU`) |
 | `sensor.<nom>_efficacite_dju_veille` | Bilan `kWh/DJU` consolidé de la veille (J-1) |
 | `sensor.<nom>_efficacite_dju_7_jours` | Efficacité glissante sur les 7 derniers jours complets ($\sum \text{kWh} / \sum \text{DJU}$) |
+
+### Suivi énergétique par DJU réel (compensé par la T° intérieure — créé si capteurs T° intérieure + extérieure configurés)
+
+Si vous sélectionnez un ou plusieurs capteurs de température intérieure (salon, chambres, etc.),
+l'intégration calcule leur moyenne en direct ($\overline{T_{\text{int}}}$) et intègre des **DJU réels**
+basés sur l'écart thermique réel $\max(0, \overline{T_{\text{int}}} - T_{\text{ext}})$ : chauffer plus
+fort à l'intérieur augmente naturellement les DJU réels, ce qui permet de juger l'efficacité de
+la PAC indépendamment des changements de consigne.
+
+| Entité | Description |
+|---|---|
+| `sensor.<nom>_temperature_interieure_moyenne` | Moyenne en temps réel des capteurs de température intérieure sélectionnés (°C) |
+| `sensor.<nom>_dju_reel_aujourdhui` | Degrés-Jours réels ($\max(0, \overline{T_{\text{int}}} - T_{\text{ext}})$) accumulés depuis minuit |
+| `sensor.<nom>_efficacite_dju_reel_aujourdhui` | Efficacité temps réel compensée par la T° intérieure (`kWh/DJU`) |
+| `sensor.<nom>_efficacite_dju_reel_veille` | Bilan `kWh/DJU réel` consolidé de la veille (J-1) |
+| `sensor.<nom>_efficacite_dju_reel_7_jours` | Efficacité glissante sur les 7 derniers jours ($\sum \text{kWh} / \sum \text{DJU}_{\text{réel}}$) |
 
 L'énergie électrique consommée (`kWh`) est calculée automatiquement par intégration temporelle
 (somme de Riemann à gauche) du capteur de puissance en Watts déjà configuré — aucun compteur
@@ -101,14 +118,15 @@ Paramètres → Appareils et services → Ajouter une intégration → "HeatPump
 ### Étape 2 (optionnelle) : DJU & Rendement
 Après l'étape ci-dessus, un second écran propose de renseigner (tout est optionnel,
 laissez vide ce que vous n'utilisez pas) :
-- **Capteur de température extérieure** : active à lui seul les 4 capteurs de suivi `DJU` et `kWh/DJU`
-- **Entité climate** : pour connaître le mode chaud/froid et la température intérieure mesurée
+- **Capteur de température extérieure** : active les capteurs de suivi `DJU` (base 18 °C) et `kWh/DJU`
+- **Capteurs de température intérieure (liste multiple)** : calcule la température intérieure moyenne des pièces sélectionnées, active le suivi `kWh/DJU réel` et alimente le calcul du COP/EER
+- **Entité climate** : pour connaître le mode chaud/froid (et la température intérieure si aucun capteur intérieur n'est sélectionné)
 - **Capteur d'humidité extérieure** : pour affiner la pénalité de givrage sur le COP
 - **COP nominal**, **EER nominal**, **kW chaud**, **kW froid** : valeurs de la fiche technique
   constructeur (ex. Panasonic Multi Z : COP 4,25 / EER 3,91 / 8,5 kW chaud / 6,8 kW froid)
 
-Tous les seuils, capteurs météo/climate et valeurs constructeur sont modifiables à tout moment
-via le bouton **"Configurer"** de l'intégration (sans perdre les compteurs déjà accumulés).
+Tous les seuils, capteurs intérieurs/météo/climate et valeurs constructeur sont modifiables à tout
+moment via le bouton **"Configurer"** de l'intégration (sans perdre les compteurs déjà accumulés).
 
 ## Notes
 
@@ -116,9 +134,9 @@ via le bouton **"Configurer"** de l'intégration (sans perdre les compteurs déj
   veille électronique (le compresseur module en continu et ne s'arrête pas franchement).
 - Vérifiez `binary_sensor.<nom>_en_fonctionnement` pendant quelques jours avant de faire
   confiance aux statistiques, pour vous assurer qu'il ne "flappe" pas.
-- Pour le bilan `kWh/DJU (veille)`, une journée n'est consolidée à minuit que si l'intégration
-  a suivi au moins 18 h sur les 24 h écoulées (évite de fausser la veille le soir même de
-  l'installation ou après une longue coupure).
+- Pour les bilans `kWh/DJU (veille)` et `kWh/DJU réel (veille)`, une journée n'est consolidée
+  à minuit que si l'intégration a suivi au moins 18 h sur les 24 h écoulées (évite de fausser
+  la veille le soir même de l'installation ou après une longue coupure).
 - Les données (compteurs cumulés, historique 7 jours des cycles et des DJU) sont stockées dans
   `.storage/heatpump_health_<entry_id>` et survivent aux redémarrages de Home Assistant.
 

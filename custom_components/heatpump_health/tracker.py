@@ -23,6 +23,7 @@ from .const import (
     CONF_COP_NOMINAL,
     CONF_DELAY_OFF,
     CONF_EER_NOMINAL,
+    CONF_INDOOR_TEMP_SENSORS,
     CONF_INITIAL_CYCLES,
     CONF_INSTALL_DATE,
     CONF_KW_CHAUD,
@@ -40,6 +41,7 @@ from .const import (
     DEFAULT_SEUIL_ELEVE,
     DEFAULT_SEUIL_FAIBLE,
     DEFAULT_THRESHOLD_W,
+    DJU_BASE_TEMP_C,
     DOMAIN,
     MAX_INTEGRATION_GAP_SECONDS,
     MIN_DJU_DAILY,
@@ -101,17 +103,20 @@ class HeatPumpHealthTracker:
         self.daily_cycles: int = 0
         self.cycle_history: list[dict[str, Any]] = []  # [{"end": iso, "duration_min": float}]
 
-        # Suivi énergétique quotidien (kWh / DJU)
+        # Suivi énergétique quotidien (kWh / DJU base 18°C & DJU réel sur T° int moyenne)
         self.daily_energy_kwh: float = 0.0
         self.daily_dju: float = 0.0
+        self.daily_dju_reel: float = 0.0
         self.daily_tracked_seconds: float = 0.0
-        self.dju_history: list[dict[str, Any]] = []  # [{"date": iso, "kwh": float, "dju": float, "tracked_h": float}]
+        self.daily_tracked_reel_seconds: float = 0.0
+        self.dju_history: list[dict[str, Any]] = []
 
         # Curseurs d'intégration temps réel (somme de Riemann à gauche)
         self._last_energy_ts: datetime | None = None
         self._last_power_w: float | None = None
         self._last_dju_ts: datetime | None = None
         self._last_outdoor_temp_c: float | None = None
+        self._last_indoor_temp_c: float | None = None
         self._last_save_ts: datetime | None = None
 
     # ------------------------------------------------------------------ #
@@ -146,10 +151,19 @@ class HeatPumpHealthTracker:
     def seuil_eleve(self) -> float:
         return float(self._opt(CONF_SEUIL_ELEVE, DEFAULT_SEUIL_ELEVE))
 
-    # -- Rendement (COP/EER théorique) & DJU -- #
+    # -- Rendement (COP/EER théorique), capteurs intérieurs & DJU -- #
     @property
     def climate_entity(self) -> str | None:
         return self._opt(CONF_CLIMATE_ENTITY)
+
+    @property
+    def indoor_temp_sensors(self) -> list[str]:
+        val = self._opt(CONF_INDOOR_TEMP_SENSORS)
+        if not val:
+            return []
+        if isinstance(val, str):
+            return [val]
+        return [str(e) for e in val if e]
 
     @property
     def outdoor_temp_sensor(self) -> str | None:
@@ -200,13 +214,21 @@ class HeatPumpHealthTracker:
         return bool(self.climate_entity and self.outdoor_temp_sensor and self.eer_nominal)
 
     @property
+    def has_dju_reel_config(self) -> bool:
+        return bool(self.outdoor_temp_sensor and self.indoor_temp_sensors)
+
+    @property
     def performance_entities(self) -> list[str]:
         """Entités à surveiller pour rafraîchir le rendement et les DJU."""
-        return [
+        entities = [
             e
             for e in (self.climate_entity, self.outdoor_temp_sensor, self.outdoor_humidity_sensor)
             if e
         ]
+        for sensor_id in self.indoor_temp_sensors:
+            if sensor_id not in entities:
+                entities.append(sensor_id)
+        return entities
 
     # ------------------------------------------------------------------ #
     # Cycle de vie de l'intégration
@@ -221,6 +243,7 @@ class HeatPumpHealthTracker:
         self._last_power_w = self._read_power_w()
         self._last_energy_ts = now
         self._last_outdoor_temp_c = self.temperature_exterieure
+        self._last_indoor_temp_c = self.temperature_interieure_moyenne
         self._last_dju_ts = now
         self._last_save_ts = now
 
@@ -306,7 +329,7 @@ class HeatPumpHealthTracker:
         cycle_start = stored.get("cycle_start")
         self.cycle_start = dt_util.parse_datetime(cycle_start) if cycle_start else None
 
-        # Migration douce depuis les versions < 1.1.0
+        # Migration douce depuis les versions précédentes
         self.initial_cycles = int(
             stored.get(
                 "initial_cycles",
@@ -322,7 +345,11 @@ class HeatPumpHealthTracker:
 
         self.daily_energy_kwh = float(stored.get("daily_energy_kwh", 0.0))
         self.daily_dju = float(stored.get("daily_dju", 0.0))
+        self.daily_dju_reel = float(stored.get("daily_dju_reel", 0.0))
         self.daily_tracked_seconds = float(stored.get("daily_tracked_seconds", 0.0))
+        self.daily_tracked_reel_seconds = float(
+            stored.get("daily_tracked_reel_seconds", 0.0)
+        )
         self.dju_history = stored.get("dju_history", [])
 
         saved_at = stored.get("saved_at")
@@ -350,7 +377,9 @@ class HeatPumpHealthTracker:
                 "cycle_start": self.cycle_start.isoformat() if self.cycle_start else None,
                 "daily_energy_kwh": self.daily_energy_kwh,
                 "daily_dju": self.daily_dju,
+                "daily_dju_reel": self.daily_dju_reel,
                 "daily_tracked_seconds": self.daily_tracked_seconds,
+                "daily_tracked_reel_seconds": self.daily_tracked_reel_seconds,
                 "dju_history": self.dju_history,
                 "saved_at": now.isoformat(),
             }
@@ -360,7 +389,7 @@ class HeatPumpHealthTracker:
         self.hass.async_create_task(self._async_save(), name="heatpump_health_save")
 
     # ------------------------------------------------------------------ #
-    # Intégration continue kWh & DJU (somme de Riemann à gauche)
+    # Intégration continue kWh, DJU base 18°C & DJU réel (T_int - T_ext)
     # ------------------------------------------------------------------ #
     def _read_power_w(self) -> float | None:
         state = self.hass.states.get(self.power_sensor)
@@ -372,7 +401,7 @@ class HeatPumpHealthTracker:
             return None
 
     def _accrue_energy_and_dju(self, now: datetime) -> bool:
-        """Intègre l'énergie (kWh) et les DJU depuis le dernier point connu."""
+        """Intègre l'énergie (kWh), les DJU base 18°C et les DJU réels depuis le dernier point."""
         changed = False
         prev_power_w = self._last_power_w
 
@@ -392,14 +421,29 @@ class HeatPumpHealthTracker:
             if self._last_dju_ts is not None and self._last_outdoor_temp_c is not None:
                 dt_d = (now - self._last_dju_ts).total_seconds()
                 if 0.0 < dt_d <= MAX_INTEGRATION_GAP_SECONDS:
-                    added_dju = incremental_dju(self._last_outdoor_temp_c, dt_d)
+                    added_dju = incremental_dju(
+                        self._last_outdoor_temp_c, dt_d, DJU_BASE_TEMP_C
+                    )
                     if added_dju > 0.0:
                         self.daily_dju += added_dju
                         changed = True
                     if prev_power_w is not None:
                         self.daily_tracked_seconds += dt_d
+
+                    # DJU réel prenant en compte la température intérieure moyenne mesurée
+                    if self._last_indoor_temp_c is not None:
+                        added_reel = incremental_dju(
+                            self._last_outdoor_temp_c, dt_d, self._last_indoor_temp_c
+                        )
+                        if added_reel > 0.0:
+                            self.daily_dju_reel += added_reel
+                            changed = True
+                        if prev_power_w is not None:
+                            self.daily_tracked_reel_seconds += dt_d
+
             self._last_dju_ts = now
             self._last_outdoor_temp_c = self.temperature_exterieure
+            self._last_indoor_temp_c = self.temperature_interieure_moyenne
 
         return changed
 
@@ -420,7 +464,7 @@ class HeatPumpHealthTracker:
 
     @callback
     def _handle_performance_event(self, event: Event) -> None:
-        """La météo, l'humidité ou le mode climate a changé : on intègre et on rafraîchit."""
+        """La météo, la T° intérieure ou le mode climate a changé : on intègre et on rafraîchit."""
         now = dt_util.utcnow()
         self._accrue_energy_and_dju(now)
         if self._rollover_day_if_needed():
@@ -438,13 +482,10 @@ class HeatPumpHealthTracker:
         above_threshold = value > self.threshold_w
 
         if above_threshold:
-            # Une remontée de puissance annule un arrêt en attente (dégivrage,
-            # modulation) et démarre un cycle si la PAC était réellement à l'arrêt.
             self._cancel_pending_off()
             if not self.is_running:
                 self._start_cycle()
             else:
-                # Met à jour en direct la puissance restituée pendant la modulation
                 self._notify()
         elif self.is_running and self._unsub_pending_off is None:
             self._schedule_pending_off(fallback_since=startup_fallback_end)
@@ -460,8 +501,6 @@ class HeatPumpHealthTracker:
         self._notify()
 
     def _schedule_pending_off(self, fallback_since: datetime | None = None) -> None:
-        # Mémorise l'instant réel où la puissance est passée sous le seuil afin de ne
-        # pas gonfler la durée du cycle avec le délai de confirmation `delay_off`.
         self._pending_off_since = fallback_since or dt_util.utcnow()
         if self.delay_off <= 0:
             self._confirm_off(self._pending_off_since)
@@ -531,6 +570,7 @@ class HeatPumpHealthTracker:
 
         days_gap = (today - self.current_day).days
         tracked_h = self.daily_tracked_seconds / 3600.0
+        tracked_reel_h = self.daily_tracked_reel_seconds / 3600.0
         if (
             days_gap == 1
             and self.outdoor_temp_sensor
@@ -545,7 +585,9 @@ class HeatPumpHealthTracker:
                     "date": day_iso,
                     "kwh": round(self.daily_energy_kwh, 4),
                     "dju": round(self.daily_dju, 4),
+                    "dju_reel": round(self.daily_dju_reel, 4),
                     "tracked_h": round(tracked_h, 2),
+                    "tracked_reel_h": round(tracked_reel_h, 2),
                 }
             )
 
@@ -553,7 +595,9 @@ class HeatPumpHealthTracker:
         self.daily_cycles = 0
         self.daily_energy_kwh = 0.0
         self.daily_dju = 0.0
+        self.daily_dju_reel = 0.0
         self.daily_tracked_seconds = 0.0
+        self.daily_tracked_reel_seconds = 0.0
         self._prune_history()
         self._prune_dju_history()
         return True
@@ -666,11 +710,15 @@ class HeatPumpHealthTracker:
         return NIVEAU_FAIBLE
 
     # ------------------------------------------------------------------ #
-    # Indicateurs DJU & efficacité énergétique (kWh / DJU)
+    # Indicateurs DJU (base 18°C) & DJU réel (T_int moyenne - T_ext)
     # ------------------------------------------------------------------ #
     @property
     def daily_tracked_hours(self) -> float:
         return self.daily_tracked_seconds / 3600.0
+
+    @property
+    def daily_tracked_reel_hours(self) -> float:
+        return self.daily_tracked_reel_seconds / 3600.0
 
     @property
     def date_veille(self) -> str:
@@ -688,6 +736,15 @@ class HeatPumpHealthTracker:
     def dju_veille(self) -> float | None:
         entry = self._veille_entry
         return round(entry["dju"], 2) if entry is not None else None
+
+    @property
+    def dju_reel_veille(self) -> float | None:
+        entry = self._veille_entry
+        if entry is None or "dju_reel" not in entry:
+            return None
+        if entry.get("tracked_reel_h", 0.0) < MIN_TRACKED_HOURS_FOR_ARCHIVE:
+            return None
+        return round(entry["dju_reel"], 2)
 
     @property
     def energie_veille_kwh(self) -> float | None:
@@ -727,11 +784,65 @@ class HeatPumpHealthTracker:
             if total_dju < MIN_DJU_DAILY:
                 return None
             return round(total_kwh / total_dju, 2)
-        # Tant qu'aucune journée complète n'est archivée, repli sur le jour en cours
         return self.kwh_par_dju_aujourdhui
 
+    # -- Indicateurs DJU réel (compensés par la température intérieure moyenne) -- #
+    @property
+    def _dju_reel_history(self) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in self.dju_history
+            if item.get("tracked_reel_h", 0.0) >= MIN_TRACKED_HOURS_FOR_ARCHIVE
+        ]
+
+    @property
+    def jours_reel_comptabilises_7j(self) -> int:
+        return len(self._dju_reel_history)
+
+    @property
+    def energie_reel_7j_kwh(self) -> float:
+        reel_days = self._dju_reel_history
+        if reel_days:
+            return round(sum(item["kwh"] for item in reel_days), 3)
+        return round(self.daily_energy_kwh, 3)
+
+    @property
+    def dju_reel_7j(self) -> float:
+        reel_days = self._dju_reel_history
+        if reel_days:
+            return round(sum(item.get("dju_reel", 0.0) for item in reel_days), 2)
+        return round(self.daily_dju_reel, 2)
+
+    @property
+    def kwh_par_dju_reel_aujourdhui(self) -> float | None:
+        if self.daily_dju_reel < MIN_DJU_TODAY:
+            return None
+        return round(self.daily_energy_kwh / self.daily_dju_reel, 2)
+
+    @property
+    def kwh_par_dju_reel_veille(self) -> float | None:
+        entry = self._veille_entry
+        if (
+            entry is None
+            or entry.get("tracked_reel_h", 0.0) < MIN_TRACKED_HOURS_FOR_ARCHIVE
+            or entry.get("dju_reel", 0.0) < MIN_DJU_DAILY
+        ):
+            return None
+        return round(entry["kwh"] / entry["dju_reel"], 2)
+
+    @property
+    def kwh_par_dju_reel_7j(self) -> float | None:
+        reel_days = self._dju_reel_history
+        if reel_days:
+            total_kwh = sum(item["kwh"] for item in reel_days)
+            total_dju_reel = sum(item.get("dju_reel", 0.0) for item in reel_days)
+            if total_dju_reel < MIN_DJU_DAILY:
+                return None
+            return round(total_kwh / total_dju_reel, 2)
+        return self.kwh_par_dju_reel_aujourdhui
+
     # ------------------------------------------------------------------ #
-    # Rendement (COP/EER théorique) — lecture live des entités sources
+    # Rendement (COP/EER théorique) & températures — lecture live
     # ------------------------------------------------------------------ #
     def _read_float(self, entity_id: str | None) -> float | None:
         if not entity_id:
@@ -743,6 +854,27 @@ class HeatPumpHealthTracker:
             return float(state.state)
         except (ValueError, TypeError):
             return None
+
+    @property
+    def _valid_indoor_sensor_values(self) -> list[float]:
+        values: list[float] = []
+        for entity_id in self.indoor_temp_sensors:
+            val = self._read_float(entity_id)
+            if val is not None:
+                values.append(val)
+        return values
+
+    @property
+    def active_indoor_temp_sensors_count(self) -> int:
+        return len(self._valid_indoor_sensor_values)
+
+    @property
+    def temperature_interieure_moyenne(self) -> float | None:
+        """Moyenne arithmétique des capteurs de température intérieure disponibles."""
+        values = self._valid_indoor_sensor_values
+        if not values:
+            return None
+        return round(sum(values) / len(values), 2)
 
     @property
     def temperature_exterieure(self) -> float | None:
@@ -821,14 +953,19 @@ class HeatPumpHealthTracker:
 
     @property
     def temperature_interieure_effective(self) -> float | None:
-        """Température intérieure utilisée pour le COP/EER (mesurée, sinon repli consigne)."""
-        t_int = self.temperature_interieure_actuelle
-        return t_int if t_int is not None else self.consigne_climate
+        """Température intérieure retenue (moyenne capteurs int., sinon climate, sinon consigne)."""
+        t_sensors = self.temperature_interieure_moyenne
+        if t_sensors is not None:
+            return t_sensors
+        t_climate = self.temperature_interieure_actuelle
+        return t_climate if t_climate is not None else self.consigne_climate
 
     @property
     def source_temperature_interieure(self) -> str | None:
+        if self.temperature_interieure_moyenne is not None:
+            return "capteurs_interieurs"
         if self.temperature_interieure_actuelle is not None:
-            return "mesuree"
+            return "climate_mesuree"
         if self.consigne_climate is not None:
             return "consigne"
         return None
@@ -891,7 +1028,9 @@ class HeatPumpHealthTracker:
         self.daily_cycles = 0
         self.daily_energy_kwh = 0.0
         self.daily_dju = 0.0
+        self.daily_dju_reel = 0.0
         self.daily_tracked_seconds = 0.0
+        self.daily_tracked_reel_seconds = 0.0
         self.dju_history = []
         self.current_day = dt_util.now().date()
         self.start_date = dt_util.utcnow()
@@ -903,11 +1042,11 @@ class HeatPumpHealthTracker:
         self._last_power_w = self._read_power_w()
         self._last_dju_ts = now
         self._last_outdoor_temp_c = self.temperature_exterieure
+        self._last_indoor_temp_c = self.temperature_interieure_moyenne
 
         await self._async_save()
         self._notify()
 
-        # Si la PAC tourne au moment même du reset, redémarre proprement un 1er cycle
         current = self.hass.states.get(self.power_sensor)
         if current is not None:
             self._evaluate_power(current)
