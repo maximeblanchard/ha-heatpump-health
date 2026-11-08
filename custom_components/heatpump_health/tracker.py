@@ -19,6 +19,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CEILING_HEIGHT,
     CONF_CLIMATE_ENTITY,
     CONF_COP_NOMINAL,
     CONF_DELAY_OFF,
@@ -34,7 +35,9 @@ from .const import (
     CONF_POWER_SENSOR,
     CONF_SEUIL_ELEVE,
     CONF_SEUIL_FAIBLE,
+    CONF_SURFACE_M2,
     CONF_THRESHOLD_W,
+    DEFAULT_CEILING_HEIGHT,
     DEFAULT_DELAY_OFF,
     DEFAULT_INITIAL_CYCLES,
     DEFAULT_MAX_CYCLES,
@@ -43,6 +46,11 @@ from .const import (
     DEFAULT_THRESHOLD_W,
     DJU_BASE_TEMP_C,
     DOMAIN,
+    ISOLATION_BONNE,
+    ISOLATION_MOYENNE,
+    ISOLATION_PASSOIRE,
+    ISOLATION_TRES_BONNE,
+    ISOLATION_TRES_PERFORMANT,
     MAX_INTEGRATION_GAP_SECONDS,
     MIN_DJU_DAILY,
     MIN_DJU_TODAY,
@@ -63,6 +71,8 @@ from .const import (
 from .performance import (
     calibrate_eta_cooling,
     calibrate_eta_heating,
+    calculate_heat_loss_g,
+    calculate_heat_loss_h,
     estimate_cop_heating,
     estimate_eer_cooling,
     incremental_dju,
@@ -72,7 +82,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class HeatPumpHealthTracker:
-    """Suit l'état marche/arrêt de la PAC, l'usure et l'efficacité énergétique (kWh/DJU)."""
+    """Suit l'état marche/arrêt de la PAC, l'usure, l'efficacité (kWh/DJU) et l'isolation."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
@@ -103,8 +113,9 @@ class HeatPumpHealthTracker:
         self.daily_cycles: int = 0
         self.cycle_history: list[dict[str, Any]] = []  # [{"end": iso, "duration_min": float}]
 
-        # Suivi énergétique quotidien (kWh / DJU base 18°C & DJU réel sur T° int moyenne)
+        # Suivi énergétique quotidien (kWh électrique, kWh thermique, DJU base 18°C & DJU réel)
         self.daily_energy_kwh: float = 0.0
+        self.daily_thermal_energy_kwh: float = 0.0
         self.daily_dju: float = 0.0
         self.daily_dju_reel: float = 0.0
         self.daily_tracked_seconds: float = 0.0
@@ -193,6 +204,23 @@ class HeatPumpHealthTracker:
         value = self._opt(CONF_KW_FROID)
         return float(value) if value is not None else None
 
+    # -- Bâtiment et isolation -- #
+    @property
+    def surface_m2(self) -> float | None:
+        value = self._opt(CONF_SURFACE_M2)
+        return float(value) if value is not None else None
+
+    @property
+    def hauteur_plafond(self) -> float:
+        value = self._opt(CONF_CEILING_HEIGHT, DEFAULT_CEILING_HEIGHT)
+        return float(value) if value is not None else DEFAULT_CEILING_HEIGHT
+
+    @property
+    def volume_m3(self) -> float | None:
+        if self.surface_m2 is None:
+            return None
+        return round(self.surface_m2 * self.hauteur_plafond, 1)
+
     @property
     def eta_heating(self) -> float | None:
         """Facteur d'efficacité réel/Carnot, calibré sur le COP nominal déclaré."""
@@ -207,15 +235,33 @@ class HeatPumpHealthTracker:
 
     @property
     def has_cop_config(self) -> bool:
-        return bool(self.climate_entity and self.outdoor_temp_sensor and self.cop_nominal)
+        return bool(
+            (self.climate_entity or self.indoor_temp_sensors)
+            and self.outdoor_temp_sensor
+            and self.cop_nominal
+        )
 
     @property
     def has_eer_config(self) -> bool:
-        return bool(self.climate_entity and self.outdoor_temp_sensor and self.eer_nominal)
+        return bool(
+            (self.climate_entity or self.indoor_temp_sensors)
+            and self.outdoor_temp_sensor
+            and self.eer_nominal
+        )
 
     @property
     def has_dju_reel_config(self) -> bool:
         return bool(self.outdoor_temp_sensor and self.indoor_temp_sensors)
+
+    @property
+    def has_thermal_loss_config(self) -> bool:
+        """Nécessite au minimum le capteur extérieur et le COP nominal."""
+        return bool(self.outdoor_temp_sensor and self.cop_nominal)
+
+    @property
+    def has_insulation_rating_config(self) -> bool:
+        """Nécessite la déperdition thermique et la surface habitable."""
+        return bool(self.has_thermal_loss_config and self.surface_m2 and self.surface_m2 > 0)
 
     @property
     def performance_entities(self) -> list[str]:
@@ -264,7 +310,6 @@ class HeatPumpHealthTracker:
             EVENT_HOMEASSISTANT_STOP, self._handle_ha_stop
         )
 
-        # Réconcilie l'état courant du capteur de puissance au démarrage
         current = self.hass.states.get(self.power_sensor)
         if current is not None:
             self._evaluate_power(current, startup_fallback_end=self._loaded_saved_at)
@@ -302,7 +347,6 @@ class HeatPumpHealthTracker:
     async def _async_load(self) -> None:
         stored = await self._store.async_load()
         if stored is None:
-            # Première installation : on initialise depuis les valeurs du config_flow
             self.initial_cycles = int(
                 self.entry.data.get(CONF_INITIAL_CYCLES, DEFAULT_INITIAL_CYCLES)
             )
@@ -329,7 +373,6 @@ class HeatPumpHealthTracker:
         cycle_start = stored.get("cycle_start")
         self.cycle_start = dt_util.parse_datetime(cycle_start) if cycle_start else None
 
-        # Migration douce depuis les versions précédentes
         self.initial_cycles = int(
             stored.get(
                 "initial_cycles",
@@ -344,6 +387,7 @@ class HeatPumpHealthTracker:
         self.measured_cycles = int(stored.get("measured_cycles", default_measured))
 
         self.daily_energy_kwh = float(stored.get("daily_energy_kwh", 0.0))
+        self.daily_thermal_energy_kwh = float(stored.get("daily_thermal_energy_kwh", 0.0))
         self.daily_dju = float(stored.get("daily_dju", 0.0))
         self.daily_dju_reel = float(stored.get("daily_dju_reel", 0.0))
         self.daily_tracked_seconds = float(stored.get("daily_tracked_seconds", 0.0))
@@ -376,6 +420,7 @@ class HeatPumpHealthTracker:
                 "is_running": self.is_running,
                 "cycle_start": self.cycle_start.isoformat() if self.cycle_start else None,
                 "daily_energy_kwh": self.daily_energy_kwh,
+                "daily_thermal_energy_kwh": self.daily_thermal_energy_kwh,
                 "daily_dju": self.daily_dju,
                 "daily_dju_reel": self.daily_dju_reel,
                 "daily_tracked_seconds": self.daily_tracked_seconds,
@@ -401,18 +446,24 @@ class HeatPumpHealthTracker:
             return None
 
     def _accrue_energy_and_dju(self, now: datetime) -> bool:
-        """Intègre l'énergie (kWh), les DJU base 18°C et les DJU réels depuis le dernier point."""
+        """Intègre l'énergie électrique/thermique et les DJU depuis le dernier point."""
         changed = False
         prev_power_w = self._last_power_w
 
         if self._last_energy_ts is not None and prev_power_w is not None:
             dt_e = (now - self._last_energy_ts).total_seconds()
             if 0.0 < dt_e <= MAX_INTEGRATION_GAP_SECONDS:
-                # Les DJU sont un indicateur de chauffage : si la PAC est explicitement
-                # en climatisation, on n'ajoute pas les kWh de froid au bilan DJU chaud.
+                # Les DJU et déperditions concernent le mode chauffage
                 if self.mode_fonctionnement != MODE_CLIMATISATION and prev_power_w > 0.0:
-                    self.daily_energy_kwh += (prev_power_w / 1000.0) * (dt_e / 3600.0)
+                    elec_kwh = (prev_power_w / 1000.0) * (dt_e / 3600.0)
+                    self.daily_energy_kwh += elec_kwh
                     changed = True
+
+                    cop = self.cop_instantane
+                    if cop is None and self.cop_nominal is not None:
+                        cop = self.cop_nominal
+                    if cop is not None and cop > 0.0:
+                        self.daily_thermal_energy_kwh += elec_kwh * cop
 
         self._last_energy_ts = now
         self._last_power_w = self._read_power_w()
@@ -430,7 +481,6 @@ class HeatPumpHealthTracker:
                     if prev_power_w is not None:
                         self.daily_tracked_seconds += dt_d
 
-                    # DJU réel prenant en compte la température intérieure moyenne mesurée
                     if self._last_indoor_temp_c is not None:
                         added_reel = incremental_dju(
                             self._last_outdoor_temp_c, dt_d, self._last_indoor_temp_c
@@ -584,6 +634,7 @@ class HeatPumpHealthTracker:
                 {
                     "date": day_iso,
                     "kwh": round(self.daily_energy_kwh, 4),
+                    "kwh_th": round(self.daily_thermal_energy_kwh, 4),
                     "dju": round(self.daily_dju, 4),
                     "dju_reel": round(self.daily_dju_reel, 4),
                     "tracked_h": round(tracked_h, 2),
@@ -594,6 +645,7 @@ class HeatPumpHealthTracker:
         self.current_day = today
         self.daily_cycles = 0
         self.daily_energy_kwh = 0.0
+        self.daily_thermal_energy_kwh = 0.0
         self.daily_dju = 0.0
         self.daily_dju_reel = 0.0
         self.daily_tracked_seconds = 0.0
@@ -842,6 +894,96 @@ class HeatPumpHealthTracker:
         return self.kwh_par_dju_reel_aujourdhui
 
     # ------------------------------------------------------------------ #
+    # Déperdition thermique globale H (W/K) & isolation G (W/(m³·K))
+    # ------------------------------------------------------------------ #
+    def _calculate_h(self, kwh_th: float, dju: float) -> float | None:
+        """H = (Q_thermique / DJU) * (1000 / 24) en W/K."""
+        if dju < MIN_DJU_DAILY or kwh_th <= 0.0:
+            return None
+        return calculate_heat_loss_h(kwh_th, dju)
+
+    @property
+    def h_7j(self) -> float | None:
+        """Déperdition globale H (W/K) calculée sur les 7 derniers jours."""
+        valid_days = self._dju_reel_history if self.has_dju_reel_config else [
+            item for item in self.dju_history if item.get("tracked_h", 0.0) >= MIN_TRACKED_HOURS_FOR_ARCHIVE
+        ]
+        if not valid_days:
+            return None
+        cop_ref = self.cop_nominal or 1.0
+        total_kwh_th = sum(item.get("kwh_th", item["kwh"] * cop_ref) for item in valid_days)
+        dju_key = "dju_reel" if self.has_dju_reel_config else "dju"
+        total_dju = sum(item.get(dju_key, 0.0) for item in valid_days)
+        return self._calculate_h(total_kwh_th, total_dju)
+
+    @property
+    def h_veille(self) -> float | None:
+        """Déperdition globale H (W/K) de la veille."""
+        entry = self._veille_entry
+        if entry is None:
+            return None
+        tracked = entry.get("tracked_reel_h", 0.0) if self.has_dju_reel_config else entry.get("tracked_h", 0.0)
+        if tracked < MIN_TRACKED_HOURS_FOR_ARCHIVE:
+            return None
+        cop_ref = self.cop_nominal or 1.0
+        kwh_th = entry.get("kwh_th", entry["kwh"] * cop_ref)
+        dju_val = entry.get("dju_reel" if self.has_dju_reel_config else "dju", 0.0)
+        return self._calculate_h(kwh_th, dju_val)
+
+    @property
+    def deperdition_thermique_h(self) -> float | None:
+        """Déperdition thermique globale H (W/K) : 7 jours en priorité, repli veille puis jour en cours."""
+        val_7j = self.h_7j
+        if val_7j is not None:
+            return val_7j
+        val_veille = self.h_veille
+        if val_veille is not None:
+            return val_veille
+        active_dju = self.daily_dju_reel if self.has_dju_reel_config else self.daily_dju
+        return self._calculate_h(self.daily_thermal_energy_kwh, active_dju)
+
+    @property
+    def coefficient_deperdition_g(self) -> float | None:
+        """Coefficient de déperdition volumique G (W/(m³·K)) = H / Volume."""
+        h = self.deperdition_thermique_h
+        vol = self.volume_m3
+        if h is None or vol is None or vol <= 0:
+            return None
+        return calculate_heat_loss_g(h, vol)
+
+    @property
+    def g_7j(self) -> float | None:
+        h = self.h_7j
+        vol = self.volume_m3
+        if h is None or vol is None or vol <= 0:
+            return None
+        return calculate_heat_loss_g(h, vol)
+
+    @property
+    def g_veille(self) -> float | None:
+        h = self.h_veille
+        vol = self.volume_m3
+        if h is None or vol is None or vol <= 0:
+            return None
+        return calculate_heat_loss_g(h, vol)
+
+    @property
+    def qualite_isolation(self) -> str | None:
+        """Niveau d'isolation estimé d'après le coefficient volumique G (normes RT)."""
+        g = self.coefficient_deperdition_g
+        if g is None:
+            return None
+        if g <= 0.45:
+            return ISOLATION_TRES_PERFORMANT
+        if g <= 0.75:
+            return ISOLATION_TRES_BONNE
+        if g <= 1.05:
+            return ISOLATION_BONNE
+        if g <= 1.40:
+            return ISOLATION_MOYENNE
+        return ISOLATION_PASSOIRE
+
+    # ------------------------------------------------------------------ #
     # Rendement (COP/EER théorique) & températures — lecture live
     # ------------------------------------------------------------------ #
     def _read_float(self, entity_id: str | None) -> float | None:
@@ -889,7 +1031,11 @@ class HeatPumpHealthTracker:
         """Mode réel déduit de l'entité climate : chauffage/climatisation/arrêt/inconnu."""
         climate_id = self.climate_entity
         if not climate_id:
-            return MODE_INCONNU
+            # Sans entité climate : si la PAC tourne et qu'aucun mode froid n'est déclaré, c'est du chauffage
+            if self.is_running and self.cop_nominal is not None and self.eer_nominal is None:
+                return MODE_CHAUFFAGE
+            return MODE_ARRET if not self.is_running else MODE_INCONNU
+
         state = self.hass.states.get(climate_id)
         if state is None:
             return MODE_INCONNU
@@ -1027,6 +1173,7 @@ class HeatPumpHealthTracker:
         self.cycle_history = []
         self.daily_cycles = 0
         self.daily_energy_kwh = 0.0
+        self.daily_thermal_energy_kwh = 0.0
         self.daily_dju = 0.0
         self.daily_dju_reel = 0.0
         self.daily_tracked_seconds = 0.0

@@ -17,8 +17,8 @@
         }
       },
       "performance": {
-        "title": "DJU & Rendement (COP/EER théorique) — optionnel",
-        "description": "Renseignez le capteur de température extérieure pour activer le suivi kWh/DJU (base 18 °C), ajoutez vos capteurs de température intérieure pour le suivi kWh/DJU réel (compensé par la T° ambiante moyenne), et complétez si souhaité l'entité climate et la fiche technique constructeur. Laissez vide pour ignorer.",
+        "title": "DJU, Rendement & Isolation — optionnel",
+        "description": "Renseignez le capteur extérieur pour les DJU (base 18 °C), ajoutez les capteurs intérieurs pour les DJU réels et complétez la surface/COP pour estimer les déperditions et le niveau d'isolation (W/(m³·K)). Laissez vide pour ignorer.",
         "data": {
           "climate_entity": "Entité climate (mode chaud/froid + température intérieure)",
           "indoor_temp_sensors": "Capteurs de température intérieure (moyenne des pièces)",
@@ -27,7 +27,9 @@
           "cop_nominal": "COP nominal (fiche technique)",
           "eer_nominal": "EER nominal (fiche technique)",
           "kw_chaud": "Puissance thermique nominale - chaud (kW)",
-          "kw_froid": "Puissance thermique nominale - froid (kW)"
+          "kw_froid": "Puissance thermique nominale - froid (kW)",
+          "surface_m2": "Surface habitable chauffée (m²)",
+          "hauteur_plafond": "Hauteur sous plafond moyenne (m)"
         }
       }
     },
@@ -56,7 +58,9 @@
           "cop_nominal": "COP nominal (fiche technique)",
           "eer_nominal": "EER nominal (fiche technique)",
           "kw_chaud": "Puissance thermique nominale - chaud (kW)",
-          "kw_froid": "Puissance thermique nominale - froid (kW)"
+          "kw_froid": "Puissance thermique nominale - froid (kW)",
+          "surface_m2": "Surface habitable chauffée (m²)",
+          "hauteur_plafond": "Hauteur sous plafond moyenne (m)"
         }
       }
     },
@@ -95,6 +99,18 @@
       "kwh_par_dju_reel_aujourdhui": { "name": "Efficacité DJU réel (aujourd'hui)" },
       "kwh_par_dju_reel_veille": { "name": "Efficacité DJU réel (veille)" },
       "kwh_par_dju_reel_7j": { "name": "Efficacité DJU réel (7 jours)" },
+      "deperdition_thermique_h": { "name": "Déperdition thermique globale (H)" },
+      "coefficient_deperdition_g": { "name": "Coefficient de déperdition volumique (G)" },
+      "qualite_isolation": {
+        "name": "Qualité de l'isolation estimée",
+        "state": {
+          "tres_performant": "Très performant (RE2020 / Passif)",
+          "tres_bonne": "Très bonne (RT2012)",
+          "bonne": "Bonne (RT2005)",
+          "moyenne": "Moyenne (Années 80-90)",
+          "passoire": "Faible / Passoire (< 1975)"
+        }
+      },
       "temperature_exterieure": { "name": "Température extérieure" },
       "humidite_exterieure": { "name": "Humidité extérieure" },
       "mode_fonctionnement": {

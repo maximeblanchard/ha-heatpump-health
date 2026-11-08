@@ -17,8 +17,8 @@
         }
       },
       "performance": {
-        "title": "HDD & Performance (theoretical COP/EER) — optional",
-        "description": "Select the outdoor temperature sensor to enable daily kWh/HDD tracking (18 °C base), add your indoor temperature sensors to enable real kWh/HDD tracking compensated for average room temperature, and optionally provide the climate entity and datasheet values. Leave blank to skip.",
+        "title": "HDD, Performance & Insulation — optional",
+        "description": "Select the outdoor sensor for HDD (18 °C base), add indoor sensors for real HDD, and fill in living area/COP to estimate building heat loss and insulation rating (W/(m³·K)). Leave blank to skip.",
         "data": {
           "climate_entity": "Climate entity (heat/cool mode + indoor temperature)",
           "indoor_temp_sensors": "Indoor temperature sensors (room average)",
@@ -27,7 +27,9 @@
           "cop_nominal": "Nominal COP (datasheet)",
           "eer_nominal": "Nominal EER (datasheet)",
           "kw_chaud": "Nominal heating capacity (kW)",
-          "kw_froid": "Nominal cooling capacity (kW)"
+          "kw_froid": "Nominal cooling capacity (kW)",
+          "surface_m2": "Heated living area (m²)",
+          "hauteur_plafond": "Average ceiling height (m)"
         }
       }
     },
@@ -56,7 +58,9 @@
           "cop_nominal": "Nominal COP (datasheet)",
           "eer_nominal": "Nominal EER (datasheet)",
           "kw_chaud": "Nominal heating capacity (kW)",
-          "kw_froid": "Nominal cooling capacity (kW)"
+          "kw_froid": "Nominal cooling capacity (kW)",
+          "surface_m2": "Heated living area (m²)",
+          "hauteur_plafond": "Average ceiling height (m)"
         }
       }
     },
@@ -91,6 +95,18 @@
       "kwh_par_dju_reel_aujourdhui": { "name": "Energy per real HDD (today)" },
       "kwh_par_dju_reel_veille": { "name": "Energy per real HDD (yesterday)" },
       "kwh_par_dju_reel_7j": { "name": "Energy per real HDD (7 days)" },
+      "deperdition_thermique_h": { "name": "Overall heat loss coefficient (H)" },
+      "coefficient_deperdition_g": { "name": "Volumetric heat loss coefficient (G)" },
+      "qualite_isolation": {
+        "name": "Estimated insulation quality",
+        "state": {
+          "tres_performant": "High performance (Passive / RE2020)",
+          "tres_bonne": "Very good (RT2012)",
+          "bonne": "Good (RT2005)",
+          "moyenne": "Average (1980s-1990s)",
+          "passoire": "Poor / Thermal sieve (< 1975)"
+        }
+      },
       "temperature_exterieure": { "name": "Outdoor temperature" },
       "humidite_exterieure": { "name": "Outdoor humidity" },
       "mode_fonctionnement": {

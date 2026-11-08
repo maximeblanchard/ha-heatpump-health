@@ -13,7 +13,7 @@ CONF_SEUIL_ELEVE = "seuil_cycles_eleve"
 CONF_INSTALL_DATE = "install_date"
 CONF_INITIAL_CYCLES = "initial_cycles"
 
-# Données constructeur et entités pour le calcul de rendement (COP/EER théorique & DJU)
+# Données constructeur, entités météo/intérieures & isolation du bâtiment
 CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_INDOOR_TEMP_SENSORS = "indoor_temp_sensors"
 CONF_OUTDOOR_TEMP_SENSOR = "outdoor_temp_sensor"
@@ -22,6 +22,8 @@ CONF_COP_NOMINAL = "cop_nominal"
 CONF_EER_NOMINAL = "eer_nominal"
 CONF_KW_CHAUD = "kw_chaud"
 CONF_KW_FROID = "kw_froid"
+CONF_SURFACE_M2 = "surface_m2"
+CONF_CEILING_HEIGHT = "hauteur_plafond"
 
 # Valeurs par défaut
 DEFAULT_THRESHOLD_W = 50
@@ -30,6 +32,7 @@ DEFAULT_MAX_CYCLES = 30000
 DEFAULT_SEUIL_FAIBLE = 8
 DEFAULT_SEUIL_ELEVE = 15
 DEFAULT_INITIAL_CYCLES = 0
+DEFAULT_CEILING_HEIGHT = 2.5
 
 # Comportement interne
 ROLLING_WINDOW_DAYS = 7
@@ -51,6 +54,13 @@ SIGNAL_UPDATE = f"{DOMAIN}_update"
 NIVEAU_FAIBLE = "faible"
 NIVEAU_MOYEN = "moyen"
 NIVEAU_ELEVE = "eleve"
+
+# Niveaux d'isolation thermique (basés sur le coefficient G en W/(m³·K))
+ISOLATION_TRES_PERFORMANT = "tres_performant"  # G <= 0.45 (RE2020 / Passif)
+ISOLATION_TRES_BONNE = "tres_bonne"            # 0.45 < G <= 0.75 (RT2012 / BBC)
+ISOLATION_BONNE = "bonne"                      # 0.75 < G <= 1.05 (RT2005 / RT2000)
+ISOLATION_MOYENNE = "moyenne"                  # 1.05 < G <= 1.40 (Années 1980-1990)
+ISOLATION_PASSOIRE = "passoire"                # G > 1.40 (Avant 1975)
 
 # Modes de fonctionnement dérivés de l'entité climate
 MODE_CHAUFFAGE = "chauffage"

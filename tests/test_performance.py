@@ -91,3 +91,20 @@ def test_incremental_dju_base_18_and_real_indoor_temp() -> None:
     # DJU réel basé sur la température intérieure moyenne (ex: 21.5°C int, 8.0°C ext -> 13.5 DJU/24h)
     assert perf.incremental_dju(8.0, 86400.0, base_temp_c=21.5) == pytest.approx(13.5)
     assert perf.incremental_dju(22.0, 86400.0, base_temp_c=21.5) == 0.0
+
+
+def test_heat_loss_h_and_g_calculation() -> None:
+    # Maison de 100 m² / hauteur 2.5m = volume 250 m³
+    # 96 kWh thermiques consommés sur 20 DJU
+    # H = (96 / 20) * (1000 / 24) = 4.8 * 41.6667 = 200.0 W/K
+    h = perf.calculate_heat_loss_h(96.0, 20.0)
+    assert h == pytest.approx(200.0, abs=0.1)
+
+    # G = H / Volume = 200 / 250 = 0.80 W/(m³·K)
+    g = perf.calculate_heat_loss_g(h, 250.0)
+    assert g == 0.80
+
+    # Cas limites
+    assert perf.calculate_heat_loss_h(0.0, 10.0) is None
+    assert perf.calculate_heat_loss_h(50.0, 0.0) is None
+    assert perf.calculate_heat_loss_g(200.0, 0.0) is None

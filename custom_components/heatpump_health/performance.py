@@ -1,4 +1,4 @@
-"""Modèle thermodynamique simplifié (COP/EER théorique) et calcul des DJU.
+"""Modèle thermodynamique simplifié (COP/EER théorique), DJU et isolation (H & G).
 
 Approche retenue pour le COP/EER : COP de Carnot théorique (limite thermodynamique
 idéale d'une pompe à chaleur, cf. second principe de la thermodynamique), mis à
@@ -15,13 +15,17 @@ pour une PAC air/air :
 En chauffage, une correction de givrage dégrade le COP dans la plage [-7°C, +7°C]
 uniquement lorsque le point de rosée de l'air extérieur (formule de Magnus-Tetens)
 dépasse la température estimée de la batterie extérieure sous 0°C (air froid ET
-humide, typiquement HR > ~68-70%). Un air froid mais sec ne subit ainsi aucune
-pénalité artificielle.
+humide, typiquement HR > ~68-70%).
 
 Pour le suivi énergétique quotidien, les Degrés-Jours Unifiés (DJU) de chauffage
-sont intégrés en continu par rapport à la base réglementaire française de 18°C
-(norme Météo-France / COSTIC) : 1 DJU équivaut à un déficit de 1 K sous 18°C
-maintenu pendant 24 heures.
+sont intégrés en continu :
+- DJU standard : base 18°C (norme Météo-France / COSTIC)
+- DJU réel : basé sur la température intérieure moyenne mesurée (T_int - T_ext)
+
+La déperdition thermique globale H (W/K) et le coefficient volumique G (W/(m³·K))
+quantifient l'isolation thermique du logement :
+  H (W/K) = (Q_thermique_kWh / DJU) × (1000 / 24)
+  G (W/(m³·K)) = H / Volume
 
 ⚠️ Le COP/EER reste une ESTIMATION physique simplifiée (calibrée pour l'air/air ;
 plus approximative sur une PAC air/eau en loi d'eau), pas une mesure métrologique.
@@ -45,8 +49,6 @@ APPROACH_DELTA = 5.0
 
 # Zone de température extérieure où la batterie extérieure descend sous 0°C tout en
 # brassant un air suffisamment chargé en humidité absolue pour givrer fortement.
-# La borne haute (7°C) coïncide avec le point de référence EN 14511 (pas de biais
-# de calibration à 7°C).
 DEFROST_ZONE_LOW = -7.0
 DEFROST_ZONE_HIGH = 7.0
 DEFROST_PEAK_TEMP = 1.5  # zone critique (+1°C/+2°C) où le givrage réel est maximal
@@ -161,7 +163,21 @@ def estimate_eer_cooling(t_ext_c: float, t_int_c: float, eta_cooling: float) -> 
 def incremental_dju(
     t_ext_c: float, dt_seconds: float, base_temp_c: float = DJU_BASE_TEMP_C
 ) -> float:
-    """Fraction de DJU (base 18°C) accumulée pendant un pas de temps dt_seconds."""
+    """Fraction de DJU accumulée pendant un pas de temps dt_seconds."""
     if dt_seconds <= 0.0 or t_ext_c >= base_temp_c:
         return 0.0
     return (base_temp_c - t_ext_c) * (dt_seconds / 86400.0)
+
+
+def calculate_heat_loss_h(kwh_th: float, dju: float) -> float | None:
+    """Déperdition thermique globale H (W/K) = (Q_thermique_kWh / DJU) * (1000 / 24)."""
+    if dju <= 0.0 or kwh_th <= 0.0:
+        return None
+    return round((kwh_th / dju) * (1000.0 / 24.0), 1)
+
+
+def calculate_heat_loss_g(h_w_k: float, volume_m3: float) -> float | None:
+    """Coefficient de déperdition volumique G (W/(m³·K)) = H / Volume."""
+    if volume_m3 <= 0.0 or h_w_k <= 0.0:
+        return None
+    return round(h_w_k / volume_m3, 2)

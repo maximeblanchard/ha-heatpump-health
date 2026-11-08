@@ -19,7 +19,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DJU_BASE_TEMP_C, DOMAIN, SIGNAL_UPDATE
+from .const import (
+    DJU_BASE_TEMP_C,
+    DOMAIN,
+    ISOLATION_BONNE,
+    ISOLATION_MOYENNE,
+    ISOLATION_PASSOIRE,
+    ISOLATION_TRES_BONNE,
+    ISOLATION_TRES_PERFORMANT,
+    SIGNAL_UPDATE,
+)
 from .tracker import HeatPumpHealthTracker
 
 UNIT_YEARS: str = getattr(UnitOfTime, "YEARS", "yr")
@@ -281,6 +290,64 @@ SENSOR_DESCRIPTIONS: tuple[HeatPumpHealthSensorDescription, ...] = (
             "energie_7j_kwh": t.energie_reel_7j_kwh,
             "dju_reel_7j": t.dju_reel_7j,
             "jours_comptabilises": t.jours_reel_comptabilises_7j,
+        },
+    ),
+    # -- Déperdition thermique globale H & isolation du bâtiment -- #
+    HeatPumpHealthSensorDescription(
+        key="deperdition_thermique_h",
+        translation_key="deperdition_thermique_h",
+        icon="mdi:home-thermometer-outline",
+        native_unit_of_measurement="W/K",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        exists_fn=lambda t: t.has_thermal_loss_config,
+        value_fn=lambda t: t.deperdition_thermique_h,
+        attributes_fn=lambda t: {
+            "h_7j": t.h_7j,
+            "h_veille": t.h_veille,
+            "dju_source": "dju_reel" if t.has_dju_reel_config else "dju_base_18",
+            "deperdition_surfacique_w_m2_k": (
+                round(t.deperdition_thermique_h / t.surface_m2, 2)
+                if (t.deperdition_thermique_h is not None and t.surface_m2)
+                else None
+            ),
+        },
+    ),
+    HeatPumpHealthSensorDescription(
+        key="coefficient_deperdition_g",
+        translation_key="coefficient_deperdition_g",
+        icon="mdi:home-analytics",
+        native_unit_of_measurement="W/(m³·K)",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+        exists_fn=lambda t: t.has_insulation_rating_config,
+        value_fn=lambda t: t.coefficient_deperdition_g,
+        attributes_fn=lambda t: {
+            "surface_m2": t.surface_m2,
+            "hauteur_plafond_m": t.hauteur_plafond,
+            "volume_m3": t.volume_m3,
+            "g_7j": t.g_7j,
+            "g_veille": t.g_veille,
+            "deperdition_thermique_h_w_k": t.deperdition_thermique_h,
+        },
+    ),
+    HeatPumpHealthSensorDescription(
+        key="qualite_isolation",
+        translation_key="qualite_isolation",
+        icon="mdi:shield-home-outline",
+        device_class=SensorDeviceClass.ENUM,
+        options=[
+            ISOLATION_TRES_PERFORMANT,
+            ISOLATION_TRES_BONNE,
+            ISOLATION_BONNE,
+            ISOLATION_MOYENNE,
+            ISOLATION_PASSOIRE,
+        ],
+        exists_fn=lambda t: t.has_insulation_rating_config,
+        value_fn=lambda t: t.qualite_isolation,
+        attributes_fn=lambda t: {
+            "coefficient_g": t.coefficient_deperdition_g,
+            "deperdition_thermique_h": t.deperdition_thermique_h,
         },
     ),
     # -- Rendement thermodynamique (créés uniquement selon les options renseignées) -- #

@@ -11,6 +11,7 @@ from homeassistant.helpers import selector
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_CEILING_HEIGHT,
     CONF_CLIMATE_ENTITY,
     CONF_COP_NOMINAL,
     CONF_DELAY_OFF,
@@ -26,7 +27,9 @@ from .const import (
     CONF_POWER_SENSOR,
     CONF_SEUIL_ELEVE,
     CONF_SEUIL_FAIBLE,
+    CONF_SURFACE_M2,
     CONF_THRESHOLD_W,
+    DEFAULT_CEILING_HEIGHT,
     DEFAULT_DELAY_OFF,
     DEFAULT_INITIAL_CYCLES,
     DEFAULT_MAX_CYCLES,
@@ -59,12 +62,7 @@ def _suggest(defaults: dict[str, Any], key: str) -> dict[str, Any]:
 
 
 def _performance_schema(defaults: dict[str, Any]) -> vol.Schema:
-    """Schéma partagé entre l'étape d'installation et les options (rendement & DJU).
-
-    Utilise `description={"suggested_value": ...}` plutôt que `default=` : un champ
-    laissé vide est alors simplement absent du résultat, au lieu de faire échouer la
-    validation du sélecteur (qui refuse `None`) quand aucune valeur n'est encore connue.
-    """
+    """Schéma partagé entre l'étape d'installation et les options (rendement, DJU & isolation)."""
     return vol.Schema(
         {
             vol.Optional(CONF_CLIMATE_ENTITY, **_suggest(defaults, CONF_CLIMATE_ENTITY)): selector.EntitySelector(
@@ -93,12 +91,19 @@ def _performance_schema(defaults: dict[str, Any]) -> vol.Schema:
             vol.Optional(CONF_KW_FROID, **_suggest(defaults, CONF_KW_FROID)): _number(
                 "kW", minimum=0.5, maximum=100, step=0.1
             ),
+            vol.Optional(CONF_SURFACE_M2, **_suggest(defaults, CONF_SURFACE_M2)): _number(
+                "m²", minimum=10, maximum=2000, step=1
+            ),
+            vol.Optional(
+                CONF_CEILING_HEIGHT,
+                default=defaults.get(CONF_CEILING_HEIGHT, DEFAULT_CEILING_HEIGHT),
+            ): _number("m", minimum=1.8, maximum=6.0, step=0.1),
         }
     )
 
 
 class HeatPumpHealthConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Gère l'écran d'installation initial (2 étapes : base, puis rendement/DJU)."""
+    """Gère l'écran d'installation initial (2 étapes : base, puis rendement/DJU/isolation)."""
 
     VERSION = 1
 
@@ -159,7 +164,7 @@ class HeatPumpHealthConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_performance(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Étape optionnelle : entités météo/intérieures/climate (DJU & COP/EER) et données constructeur."""
+        """Étape optionnelle : entités météo/intérieures/climate (DJU & COP/EER) et isolation."""
         if user_input is not None:
             self._data.update(user_input)
             return self.async_create_entry(title=self._data[CONF_NAME], data=self._data)
@@ -175,7 +180,7 @@ class HeatPumpHealthConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HeatPumpHealthOptionsFlow(config_entries.OptionsFlow):
-    """Permet d'ajuster les seuils, les capteurs intérieurs/extérieurs et le rendement après l'installation."""
+    """Permet d'ajuster les seuils, les capteurs intérieurs/extérieurs, le rendement et l'isolation après l'installation."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> config_entries.ConfigFlowResult:
         errors: dict[str, str] = {}

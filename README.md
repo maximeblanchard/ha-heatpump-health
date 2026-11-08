@@ -5,8 +5,9 @@
 Intégration personnalisée Home Assistant qui calcule des indicateurs d'usure d'une pompe à
 chaleur (ou de tout appareil à cycles marche/arrêt), son efficacité énergétique quotidienne
 en **kWh / DJU** (standard base 18 °C et **DJU réel** compensé par la température intérieure
-moyenne) ainsi qu'une estimation de rendement thermodynamique à partir d'un simple capteur
-de puissance en Watts.
+moyenne), l'**isolation thermique du logement** (déperditions globales $H$ en W/K et coefficient
+volumique $G$ en $\text{W}/(\text{m}^3\cdot\text{K})$), ainsi qu'une estimation de rendement
+thermodynamique à partir d'un simple capteur de puissance en Watts.
 
 ## Indicateurs fournis
 
@@ -54,10 +55,16 @@ la PAC indépendamment des changements de consigne.
 | `sensor.<nom>_efficacite_dju_reel_veille` | Bilan `kWh/DJU réel` consolidé de la veille (J-1) |
 | `sensor.<nom>_efficacite_dju_reel_7_jours` | Efficacité glissante sur les 7 derniers jours ($\sum \text{kWh} / \sum \text{DJU}_{\text{réel}}$) |
 
-L'énergie électrique consommée (`kWh`) est calculée automatiquement par intégration temporelle
-(somme de Riemann à gauche) du capteur de puissance en Watts déjà configuré — aucun compteur
-d'énergie supplémentaire n'est nécessaire. Si une entité `climate` est renseignée et passe en
-mode climatisation, l'énergie de refroidissement est automatiquement exclue du bilan DJU chauffage.
+### Isolation et déperditions thermiques du bâtiment (créé si T° extérieure + COP nominal configurés)
+
+En croisant la chaleur restituée par la PAC ($kWh_{\text{thermique}} = kWh_{\text{élec}} \times \text{COP}$)
+avec les DJU (réels ou standard), l'intégration calcule la **signature énergétique** du logement :
+
+| Entité | Condition | Description |
+|---|---|---|
+| `sensor.<nom>_deperdition_thermique_globale_h` | T° ext + COP | Déperditions globales du bâtiment en **W/K** (ou W/°C d'écart int/ext). Priorité à la moyenne 7 jours glissants. Attribut : déperdition surfacique en $\text{W}/(\text{m}^2\cdot\text{K})$. |
+| `sensor.<nom>_coefficient_deperdition_volumique_g` | H + Surface $m^2$ | Coefficient d'isolation volumique $G = H / \text{Volume}$ en **$\text{W}/(\text{m}^3\cdot\text{K})$**. |
+| `sensor.<nom>_qualite_de_lisolation_estimee` | H + Surface $m^2$ | Niveau d'isolation d'après la réglementation thermique : `tres_performant` (RE2020/Passif, $G \le 0,45$), `tres_bonne` (RT2012, $G \le 0,75$), `bonne` (RT2005, $G \le 1,05$), `moyenne` (années 80-90, $G \le 1,40$), `passoire` ($G > 1,40$). |
 
 ### Rendement théorique (optionnel — entités créées uniquement selon les champs renseignés)
 
@@ -66,8 +73,8 @@ mode climatisation, l'énergie de refroidissement est automatiquement exclue du 
 | `sensor.<nom>_temperature_exterieure` | Capteur T° extérieure | Miroir du capteur de température extérieure configuré |
 | `sensor.<nom>_humidite_exterieure` | Capteur humidité ext. | Miroir du capteur d'humidité extérieure configuré |
 | `sensor.<nom>_mode_de_fonctionnement` | Entité `climate` | `chauffage` / `climatisation` / `arret` / `inconnu` |
-| `sensor.<nom>_cop_instantane` | `climate` + T° ext + COP nominal | COP théorique en temps réel (mode chauffage uniquement) |
-| `sensor.<nom>_eer_instantane` | `climate` + T° ext + EER nominal | EER théorique en temps réel (mode climatisation uniquement) |
+| `sensor.<nom>_cop_instantane` | (`climate` ou sondes int.) + T° ext + COP nominal | COP théorique en temps réel (mode chauffage uniquement) |
+| `sensor.<nom>_eer_instantane` | (`climate` ou sondes int.) + T° ext + EER nominal | EER théorique en temps réel (mode climatisation uniquement) |
 | `sensor.<nom>_puissance_restituee` | COP ou EER configuré | Puissance thermique restituée estimée (kW) = puissance absorbée × COP/EER |
 
 **Modèle utilisé** : COP de Carnot théorique (limite thermodynamique), mis à l'échelle par
@@ -115,18 +122,17 @@ Paramètres → Appareils et services → Ajouter une intégration → "HeatPump
 - **Seuils cycles/jour faible/élevé** : bornes de l'indice d'usure 7 jours
 - **Date de mise en service / cycles déjà effectués** : optionnel, pour reprendre un comptage existant
 
-### Étape 2 (optionnelle) : DJU & Rendement
+### Étape 2 (optionnelle) : DJU, Rendement & Isolation
 Après l'étape ci-dessus, un second écran propose de renseigner (tout est optionnel,
 laissez vide ce que vous n'utilisez pas) :
 - **Capteur de température extérieure** : active les capteurs de suivi `DJU` (base 18 °C) et `kWh/DJU`
 - **Capteurs de température intérieure (liste multiple)** : calcule la température intérieure moyenne des pièces sélectionnées, active le suivi `kWh/DJU réel` et alimente le calcul du COP/EER
 - **Entité climate** : pour connaître le mode chaud/froid (et la température intérieure si aucun capteur intérieur n'est sélectionné)
 - **Capteur d'humidité extérieure** : pour affiner la pénalité de givrage sur le COP
-- **COP nominal**, **EER nominal**, **kW chaud**, **kW froid** : valeurs de la fiche technique
-  constructeur (ex. Panasonic Multi Z : COP 4,25 / EER 3,91 / 8,5 kW chaud / 6,8 kW froid)
+- **COP nominal**, **EER nominal**, **kW chaud**, **kW froid** : valeurs de la fiche technique constructeur
+- **Surface habitable chauffée ($m^2$)** & **Hauteur sous plafond (m, défaut 2.5m)** : active le calcul du coefficient $G$ et l'évaluation de la qualité de l'isolation du logement
 
-Tous les seuils, capteurs intérieurs/météo/climate et valeurs constructeur sont modifiables à tout
-moment via le bouton **"Configurer"** de l'intégration (sans perdre les compteurs déjà accumulés).
+Tous les paramètres sont modifiables à tout moment via le bouton **"Configurer"** de l'intégration (sans perdre les compteurs accumulés).
 
 ## Notes
 
